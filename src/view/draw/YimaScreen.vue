@@ -26,6 +26,36 @@ const STATE = {
   RESULT: 'RESULT'
 }
 
+// 弹幕相关
+const danmakuList = ref([])
+const danmakuTexts = [
+  '恭喜中奖！🎉', '吸欧气！✨', '大奖拿回家！🎁', '羡慕了！',
+  '下个就是我！💪', '太强了！', '666！', '好运连连！🍀',
+  '新年快乐！🧧', '万事如意！', '我也想要大奖！', '欧皇附体！',
+  '恭喜恭喜！', '一定要幸福哦！', '明年我也中！', '厉害了！',
+  '这运气没谁了！', '老板大气！', '蹭蹭喜气！', '发财了！'
+]
+
+// 大奖环节专用弹幕（更喜庆、更多样）
+const grandPrizeDanmakuTexts = [
+  '2026好运连连！🎉', '老板发红包！✨', '大奖拿回家！🎁', '羡慕了！', '太强了！',
+  '好运连连！🍀', '新年快乐！🧧', '万事如意！', '欧皇附体！', '恭喜恭喜！',
+  '今年运气爆棚！', '太幸运了吧！', '接好运啦！', '66666！', '这就是欧皇吗！',
+  '恭喜恭喜！🎊', '红红火火！', '恍恍惚惚！', '太厉害了！', '大吉大利！',
+  '好运来！🎵', '财源滚滚！💰', '心想事成！✨', '福气满满！🧧', '喜气洋洋！',
+  '运气太好了！', '让人羡慕！', '太强了吧！', '这就是实力！', '恭喜恭喜恭喜！'
+]
+
+// 喜庆词语（用于生成"名字+词语"格式的弹幕）
+const celebrationWords = [
+  '恭喜发财！', '发大财！', '好运来！', '万事如意！', '心想事成！',
+  '财源广进！', '大吉大利！', '福星高照！', '步步高升！', '红红火火！',
+  '新年快乐！', '恭喜恭喜！', '鸿运当头！', '吉星高照！', '五福临门！'
+]
+
+// 大奖环节中奖者人名列表
+let grandPrizeWinnerNames = []
+
 const drawStatus = ref(STATE.IDLE)
 const currentName = ref('准备抽奖')
 const showWinnerCard = ref(false)
@@ -120,8 +150,10 @@ const startLanternsAnimation = (names) => {
   const shuffled = [...names].sort(() => Math.random() - 0.5).slice(0, batchSize)
 
   shuffled.forEach((name, index) => {
-    // 分散在屏幕宽度上
-    const x = 10 + Math.random() * 80 // 10% - 90% 屏幕宽度
+    // 均匀分布在屏幕宽度上
+    const totalWidth = 80 // 使用 80% 的屏幕宽度区域
+    const startX = 10 // 从 10% 的位置开始
+    const x = startX + (totalWidth * index / batchSize) + (totalWidth / batchSize / 2) // 均匀分布，居中
     const imageIndex = Math.floor(Math.random() * lanternImages.length)
     const lantern = new Lantern(name, x, imageIndex)
     // 错开开始时间
@@ -433,6 +465,90 @@ const finalizeDraw = () => {
       winnerCardRef.value.style.display = 'flex'
     }
   })
+
+  // 保存中奖者人名列表（用于大奖弹幕）
+  grandPrizeWinnerNames = winnerList.value.map(w => w.name || w)
+
+  // 初始化弹幕
+  setTimeout(() => {
+    initDanmaku()
+  }, 500)
+}
+
+// ========== 弹幕初始化 ==========
+const initDanmaku = () => {
+  danmakuList.value = []
+
+  // 判断是否为大奖环节（有中奖者人名列表且人数少于5人）
+  const isGrandPrize = grandPrizeWinnerNames.length > 0 && grandPrizeWinnerNames.length < 5
+  const count = isGrandPrize ? 100 : 40
+  const textsPool = isGrandPrize ? grandPrizeDanmakuTexts : danmakuTexts
+
+  for (let i = 0; i < count; i++) {
+    let text
+
+    // 大奖环节：前20条弹幕使用"人名+喜庆词语"格式
+    if (isGrandPrize && i < 20 && grandPrizeWinnerNames.length > 0) {
+      const randomName = grandPrizeWinnerNames[Math.floor(Math.random() * grandPrizeWinnerNames.length)]
+      const randomWord = celebrationWords[Math.floor(Math.random() * celebrationWords.length)]
+      text = `${randomName}${randomWord}`
+    } else {
+      text = textsPool[Math.floor(Math.random() * textsPool.length)]
+    }
+
+    // 优化弹幕分布：分层垂直位置，避免重叠
+    let top
+    if (isGrandPrize) {
+      // 大奖环节：将100条弹幕分成10层，每层10条
+      const layer = i % 10
+      const layerOffset = (Math.random() - 0.5) * 4 // 每层内微调 ±2%
+      top = 5 + layer * 9 + layerOffset // 从5%开始，每层间隔9%
+    } else {
+      top = Math.random() * 90
+    }
+
+    // 优化延迟时间：大奖弹幕延迟范围更长，分批出现
+    let delay
+    if (isGrandPrize) {
+      // 大奖环节：延迟0-60秒，分散出现
+      const batch = Math.floor(i / 10) // 分10批
+      delay = batch * 3 + Math.random() * 6 // 每批间隔约3秒，批内随机0-6秒
+    } else {
+      delay = Math.random() * 30
+    }
+
+    const duration = isGrandPrize ? (20 + Math.random() * 15) : (15 + Math.random() * 20)
+    // 大奖弹幕字体稍小一些，避免太拥挤
+    const fontSize = isGrandPrize ? (1.0 + Math.random() * 0.8 + 'rem') : (1.2 + Math.random() * 1.5 + 'rem')
+
+    // 大奖环节增加金色和红色弹幕比例（金色40%、红色40%、白色20%）
+    let color
+    if (isGrandPrize) {
+      const rand = Math.random()
+      if (rand < 0.4) {
+        color = '#FFD700' // 金色 40%
+      } else if (rand < 0.8) {
+        color = '#FF6B6B' // 红色 40%
+      } else {
+        color = '#FFFFFF' // 白色 20%
+      }
+    } else {
+      color = Math.random() > 0.6 ? '#FFD700' : '#FFFFFF'
+    }
+
+    danmakuList.value.push({
+      id: i,
+      text,
+      style: {
+        top: `${top}%`,
+        left: '100%',
+        animationDuration: `${duration}s`,
+        animationDelay: `${delay}s`,
+        fontSize,
+        color
+      }
+    })
+  }
 }
 
 // 彩带效果
@@ -472,6 +588,9 @@ const resetDraw = () => {
   horseAnimationDuration.value = '0.6s'
   setBackgroundSpeed(2)
   clearInterval(animationInterval)
+  // 清空大奖中奖者人名列表和弹幕
+  grandPrizeWinnerNames = []
+  danmakuList.value = []
 }
 
 // 切换抽奖状态
@@ -551,7 +670,7 @@ onUnmounted(() => {
 
         <!-- 名字显示区域 -->
         <div class="lottery-display">
-          <div ref="nameRollerRef" class="name-roller">{{ currentName }}</div>
+          <div v-show="!showWinnerCard" ref="nameRollerRef" class="name-roller">{{ currentName }}</div>
 
           <!-- 中奖卡片 -->
           <div ref="winnerCardRef" class="winner-card" :style="{ display: showWinnerCard ? 'flex' : 'none' }">
@@ -610,6 +729,18 @@ onUnmounted(() => {
             <img v-else :src="getTailImage(i, lantern.tailLength)" class="tail-part" alt="尾巴">
           </template>
         </div>
+      </div>
+    </div>
+
+    <!-- 弹幕层 -->
+    <div v-if="drawStatus === 'RESULT' && danmakuList.length > 0" class="danmaku-container">
+      <div
+        v-for="item in danmakuList"
+        :key="item.id"
+        class="danmaku-item"
+        :style="item.style"
+      >
+        {{ item.text }}
       </div>
     </div>
 
@@ -1081,5 +1212,38 @@ onUnmounted(() => {
   white-space: nowrap;
   letter-spacing: 3px;
   text-shadow: 0 0 3px rgba(255, 215, 0, 0.6);
+}
+
+/* 弹幕样式 */
+.danmaku-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 25%;
+  z-index: 300;
+  pointer-events: none;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+}
+
+.danmaku-item {
+  position: absolute;
+  white-space: nowrap;
+  font-weight: 900;
+  text-shadow: 0 0 5px rgba(0, 0, 0, 0.8), 0 0 10px rgba(0, 0, 0, 0.5);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  animation: moveRightLeft linear forwards;
+  will-change: transform;
+}
+
+@keyframes moveRightLeft {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-150vw);
+  }
 }
 </style>
