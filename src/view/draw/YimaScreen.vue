@@ -192,12 +192,58 @@ const COLORS = {
   cream: '#FFFDD0'
 }
 
+// ========== 音频播放 ==========
+let audioElements = { start: null, end: null, bgm: null }
+
+function playSound(type) {
+  try {
+    if (audioElements[type]) {
+      audioElements[type].pause()
+      audioElements[type].currentTime = 0
+    }
+
+    audioElements[type] = new Audio(`/audio/${type}.mp3`)
+    audioElements[type].volume = 0.8
+    audioElements[type].play()
+  } catch (error) {
+    console.error(`播放${type}音频失败:`, error)
+  }
+}
+
+function stopAllSounds() {
+  Object.keys(audioElements).forEach(key => {
+    if (audioElements[key]) {
+      audioElements[key].pause()
+      audioElements[key].currentTime = 0
+    }
+  })
+}
+
 // Computed
 const currentPrize = computed(() => prizes.value[currentPrizeIndex.value] || {})
 const isCurrentPrizeAvailable = computed(() => {
   if (!currentPrize.value.id) return false
   return !isPrizeCompleted(currentPrize.value)
 })
+
+// 根据屏幕宽度和中奖人数自动计算网格列数
+const winnerGridColumns = ref(8)
+
+function getWinnerGridColumns() {
+  const count = winnerList.value.length
+  const screenWidth = window.innerWidth
+  // 每个格子最小宽度 120px，加上 gap 20px
+  const minCellWidth = 120
+  const gap = 20
+  const maxColumns = Math.floor((screenWidth - 80) / (minCellWidth + gap))
+  // 限制列数范围 8-10
+  return Math.max(8, Math.min(maxColumns, 10, count))
+}
+
+// 监听窗口大小变化，更新列数
+function handleResize() {
+  winnerGridColumns.value = getWinnerGridColumns()
+}
 
 // 生成参与者（如果没有存储的数据）
 const generateParticipants = (count = 200) => {
@@ -382,6 +428,9 @@ const startDraw = () => {
     return
   }
 
+  // 播放开始音效
+  playSound('start')
+
   drawStatus.value = STATE.RUNNING
   showWinnerCard.value = false
   horseAnimationDuration.value = '0.3s'
@@ -428,6 +477,9 @@ const stopDraw = () => {
 
 // 完成抽奖
 const finalizeDraw = () => {
+  // 播放结束音效
+  playSound('end')
+
   const count = currentPrize.value.count || 1
 
   // 选取中奖者
@@ -630,16 +682,21 @@ onMounted(() => {
   loadData()
   initBackground()
   window.addEventListener('keydown', handleKeydown)
+  window.addEventListener('resize', handleResize)
   // 启动孔明灯动画循环
   animateLanterns()
+  // 初始化列数
+  handleResize()
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
+  window.removeEventListener('resize', handleResize)
   clearInterval(animationInterval)
   if (bgAnimationFrame) cancelAnimationFrame(bgAnimationFrame)
   if (lanternAnimationFrame) cancelAnimationFrame(lanternAnimationFrame)
   bgCtx = null
+  stopAllSounds()
 })
 </script>
 
@@ -653,7 +710,7 @@ onUnmounted(() => {
       <!-- 标题 -->
       <header class="header">
         <h1 class="title">马到成功 · 鸿运当头</h1>
-        <div class="subtitle">2026 ANNUAL GALA LUCKY DRAW</div>
+        <div v-show="!showWinnerCard" class="subtitle">2026杭州西软信息技术有限公司年会</div>
       </header>
 
       <!-- 中间舞台 -->
@@ -837,7 +894,7 @@ onUnmounted(() => {
 }
 
 .subtitle {
-  font-family: 'Noto Serif SC', serif;
+font-family: 'Ma Shan Zheng', cursive;
   font-size: 2.5vh;
   color: #FFF8D6;
   letter-spacing: 0.8rem;
@@ -918,7 +975,7 @@ onUnmounted(() => {
   border-radius: 20px;
   position: relative;
   z-index: 30;
-  max-width: 90vw;
+  max-width: 95vw;
   max-height: 80vh;
   animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -946,21 +1003,26 @@ onUnmounted(() => {
 }
 
 .winner-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
   width: 100%;
+  justify-content: center;
+  align-items: center;
 }
 
 .winner-grid-item {
   font-family: 'Ma Shan Zheng', cursive;
-  font-size: 5vh;
+  font-size: 3vh;
   color: #FFD700;
   text-shadow: 0 0 5px rgba(0,0,0,0.5);
-  padding: 10px;
+  padding: 10px 15px;
   background: rgba(0,0,0,0.2);
   border: 1px solid #FFD700;
-  border-radius: 10px;
+  border-radius: 8px;
+  text-align: center;
+  flex: 0 1 auto;
+  min-width: 80px;
 }
 
 /* 底部控制区 */
