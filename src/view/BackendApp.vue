@@ -8,102 +8,123 @@ import PrizeEditModal from './components/PrizeEditModal.vue'
 import ParticipantsPage from './components/ParticipantsPage.vue'
 import RecordsPage from './components/RecordsPage.vue'
 import SettingsPage from './components/SettingsPage.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { useRouter } from 'vue-router'
 
-const router = useRouter()
-const STORAGE_KEY = 'lottery_config'
+// 导入缓存管理模块
+import {
+  loadPrizes,
+  savePrizes,
+  loadSettings,
+  saveSettings,
+  loadParticipants,
+  loadWinnerRecords
+} from '../utils/lotteryStorage'
 
+const router = useRouter()
+
+// 默认奖项配置（仅一条，用于首次初始化）
 const defaultPrizes = [
   {
-    id: 1,
-    name: '特等奖：赤兔限量版座驾',
-    description: '高端定制涂装电动轿跑',
+    id: Date.now(),
+    name: '默认奖项',
+    subtitle: '幸运抽奖',
+    description: '请编辑此奖项',
     count: 1,
-    amount: 100000,
-    image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBTPT5c1OskG2SjZXidj5kJHZL7KK8m_raA_As75THnywPNmum1AYM3HV3i2M9b7h7xCj3PQV6k7SqvH9I6yoBk9IbLqQgZkj-ZQgH1we-fhsbY-KvLdwKh2JasQhQdCSFduVHtYKQLPZW8VzGAkTGcL_MyrUB2jvfspIKXsqnmqdDHIF63fH_iiS3E-yZubCcpEJWbTFVSV1445uyPUOVQQCvJSE2iMU5n4YHTnkQzAZh5iYoeQdLV-Z3LEn5qs1Yxq3PPXgpDMj0',
+    amount: 100,
+    level: 1,
+    image: '',
     canReset: true,
     status: 'ready',
-    isSpecial: true
-  },
-  {
-    id: 2,
-    name: '一等奖：极客探索套装',
-    description: '旗舰智能手机 + 降噪蓝牙耳机',
-    count: 5,
-    amount: 8888,
-    image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCqAZhncTE-HPs-80vCYLlCOE3i_P2_kL90YJY45wOTt799M4vxqUJQgiRnfyzxwyWvUC9_NNDMYtZYTs1TBTSv1aCYXA_2HS6FcIZsAAHLVG5ZjYQ7u7FSqVLrxKcqgzPfyhI9UFDS96UnsD47gWw-_HcgTe6DSfjLiXK6RejfwrfxMNTdAS0JKhhgYufwb5Qs1aVaETfTnbaYDuO00c9xVwBfucBk2rP-4icgPyVB2cYqxTFxZgh42foW8TE2Ehd-4kuun0O4h7Q',
-    canReset: true,
-    status: 'ready',
-    isSpecial: false
-  },
-  {
-    id: 3,
-    name: '二等奖：创意办公全家桶',
-    description: '11英寸平板电脑 + 数字触控笔',
-    count: 10,
-    amount: 3000,
-    image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAZeBAkzyDB57QbQ_NlBX78EwzP2S2Z7V99Sz9QMDXqwi-X9k6PqRVKv9vn1Vj9KzL2A8N92ttW2GXzwyxesxkoeBqmI0zJG7ql9ZxQgRJKnhaSiZi_qSQ7fRqHjYW4UFbRovuwqfcljNwXyoaEfjlnA5NSqJl095m4XCLB-_Mzolhg1ptBDsopPY-OTrMH1tPdqd7Z4WWdxAtKIVTZ-o8HR9Q6cc5D2nZ6Vjm3S2-l-o_tgMlLSJn6yWJflk1szlhWpuHfPjDTQGY',
-    canReset: false,
-    status: 'incomplete',
     isSpecial: false
   }
 ]
 
-const prizes = ref([...defaultPrizes])
+// 响应式状态
+const prizes = ref([]) // 初始为空，由 loadFromCache 或 defaultPrizes 填充
 const participants = ref([])
+const winnerRecords = ref([])
 const activePage = ref('prizes')
 const showEditModal = ref(false)
 const editingPrize = ref(null)
 const isDark = ref(false)
-const settings = ref({ pageMode: 'yima' })
+const showDeleteDialog = ref(false)
+const deletingPrizeId = ref(null)
+const deletingPrizeName = ref('')
+const settings = ref({
+  drawMode: 'random',
+  weightedBy: 'department',
+  allowRepeatWins: false,
+  maxWinPerPerson: 1,
+  showWinnerAvatar: true,
+  showWinnerDept: true,
+  barrageEnabled: true,
+  bgmEnabled: true,
+  sfxEnabled: true,
+  animationSpeed: 'normal'
+})
 
+// 统计数据计算
 const prizeCount = computed(() => prizes.value.length)
-const winnerCount = computed(() => prizes.value.reduce((sum, prize) => sum + (prize.count || 0), 0))
+const winnerCount = computed(() => {
+  const records = loadWinnerRecords()
+  return records.length
+})
 const totalValue = computed(() => {
   const total = prizes.value.reduce((sum, prize) => sum + (prize.amount * prize.count), 0)
   return `¥${total.toLocaleString()}`
 })
 
+// 从缓存加载数据
 function loadFromCache() {
-  try {
-    const cached = localStorage.getItem(STORAGE_KEY)
-    if (cached) {
-      const data = JSON.parse(cached)
-      if (data.prizes && data.prizes.length > 0) {
-        prizes.value = data.prizes
-      }
-    }
-  } catch (e) {
-    console.error('加载缓存失败:', e)
+  // 加载奖项配置
+  const cachedPrizes = loadPrizes()
+  if (cachedPrizes && cachedPrizes.length > 0) {
+    prizes.value = cachedPrizes
+  } else {
+    // 没有缓存数据时，使用默认奖项并保存到缓存
+    prizes.value = JSON.parse(JSON.stringify(defaultPrizes))
+    savePrizes(prizes.value)
+  }
+
+  // 加载参与人员
+  participants.value = loadParticipants()
+
+  // 加载中奖记录
+  winnerRecords.value = loadWinnerRecords()
+
+  // 加载设置
+  const cachedSettings = loadSettings()
+  if (cachedSettings) {
+    settings.value = { ...settings.value, ...cachedSettings }
   }
 }
 
-function loadSettings() {
-  try {
-    const cached = localStorage.getItem('lottery_settings')
-    if (cached) {
-      settings.value = JSON.parse(cached)
-    }
-  } catch (e) {
-    console.error('加载设置失败:', e)
-  }
+// 保存奖项配置到缓存
+function savePrizesToCache() {
+  savePrizes(prizes.value)
 }
 
-function saveToCache() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ prizes: prizes.value }))
-  } catch (e) {
-    console.error('保存缓存失败:', e)
-  }
+// 保存设置到缓存
+function saveSettingsToCache() {
+  saveSettings(settings.value)
 }
 
-watch(prizes, saveToCache, { deep: true })
+// 监听数据变化自动保存
+watch(prizes, savePrizesToCache, { deep: true })
+watch(settings, saveSettingsToCache, { deep: true })
 
 function handleNavigate(page) {
   if (page === 'draw') {
     router.push('/')
   } else {
     activePage.value = page
+    // 切换页面时刷新数据
+    if (page === 'participants') {
+      participants.value = loadParticipants()
+    } else if (page === 'records') {
+      winnerRecords.value = loadWinnerRecords()
+    }
   }
 }
 
@@ -118,26 +139,49 @@ function handleEditPrize(prize) {
 }
 
 function handleDeletePrize(id) {
-  if (confirm('确定要删除这个奖项吗？')) {
-    prizes.value = prizes.value.filter(p => p.id !== id)
+  const prize = prizes.value.find(p => p.id === id)
+  if (prize) {
+    deletingPrizeId.value = id
+    deletingPrizeName.value = prize.name
+    showDeleteDialog.value = true
   }
+}
+
+function confirmDeletePrize() {
+  if (deletingPrizeId.value) {
+    prizes.value = prizes.value.filter(p => p.id !== deletingPrizeId.value)
+  }
+  showDeleteDialog.value = false
+  deletingPrizeId.value = null
+  deletingPrizeName.value = ''
+}
+
+function cancelDeletePrize() {
+  showDeleteDialog.value = false
+  deletingPrizeId.value = null
+  deletingPrizeName.value = ''
 }
 
 function handleSavePrize(prizeData) {
   if (editingPrize.value) {
     prizes.value = prizes.value.map(p => p.id === prizeData.id ? { ...p, ...prizeData } : p)
   } else {
+    // 生成新的奖项ID
+    const maxId = Math.max(...prizes.value.map(p => p.id || 0), 0)
     // 假设大于 5000 元的奖项为特殊大奖
-    const newPrize = { ...prizeData, id: Date.now(), status: 'ready', isSpecial: prizeData.amount >= 5000 }
+    const newPrize = {
+      ...prizeData,
+      id: Date.now(),
+      level: maxId + 1,
+      status: 'ready',
+      isSpecial: prizeData.amount >= 5000
+    }
     prizes.value = [...prizes.value, newPrize]
   }
 }
 
-
-
 onMounted(() => {
   loadFromCache()
-  loadSettings()
 
   if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
     isDark.value = true
@@ -185,6 +229,18 @@ onMounted(() => {
     </main>
 
     <PrizeEditModal :show="showEditModal" :prize="editingPrize" @close="showEditModal = false" @save="handleSavePrize" />
+
+    <!-- 删除确认弹窗 -->
+    <ConfirmDialog
+      :show="showDeleteDialog"
+      title="删除奖项"
+      :message="`确定要删除「${deletingPrizeName}」吗？\n\n此操作无法撤销，奖项将从列表中移除。`"
+      confirm-text="删除"
+      confirm-danger
+      icon="danger"
+      @confirm="confirmDeletePrize"
+      @cancel="cancelDeletePrize"
+    />
   </div>
 </template>
 

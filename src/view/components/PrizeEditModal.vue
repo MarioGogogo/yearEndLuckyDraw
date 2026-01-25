@@ -36,6 +36,16 @@ watch(() => props.prize, (newPrize) => {
       image: newPrize.image || '',
       canReset: newPrize.canReset !== undefined ? newPrize.canReset : true
     }
+  } else {
+    // 添加新奖项时，重置表单为空值
+    form.value = {
+      name: '',
+      count: 1,
+      amount: 1000,
+      description: '',
+      image: '',
+      canReset: true
+    }
   }
 }, { immediate: true })
 

@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>马到成功 - 2026年终盛典</title>
+    <meta name="description" content="Company Annual Meeting Lucky Draw - Year of the Horse">
+    
+    <!-- Fonts: Ma Shan Zheng for Calligraphy -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@700&display=swap" rel="stylesheet">
+    
+    <!-- Libraries (China-friendly CDNs) -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/canvas-confetti/1.6.0/confetti.browser.min.js"></script>
+
+    <style>
+        :root {
+            --color-red-deep: #8E0000;
+            --color-red-bright: #D20F15;
+            --color-gold: #FFD700;
+            --color-gold-light: #FFF8D6;
+            --color-cream: #FFFDD0;
+            --font-calligraphy: 'Ma Shan Zheng', cursive;
+            --font-serif: 'Noto Serif SC', serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none; /* Prevent selection during excitement */
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--color-red-deep);
+            font-family: var(--font-serif);
+        }
+
+        /* Dynamic Background Canvas */
+        #bg-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        /* Main Container */
+        #app-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            /* Vignette effect */
+            background: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.4) 100%);
+        }
+
+        /* Title Area */
+        .header {
+            position: absolute;
+            top: 5vh;
+            text-align: center;
+            z-index: 20;
+        }
+
+        .title {
+            font-family: var(--font-calligraphy);
+            font-size: 8vh;
+            color: transparent;
+            background: linear-gradient(to bottom, var(--color-gold), #BF953F);
+            -webkit-background-clip: text;
+            background-clip: text;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+            letter-spacing: 0.5rem;
+            animation: float 4s ease-in-out infinite;
+        }
+
+        .subtitle {
+            font-family: var(--font-serif);
+            font-size: 2.5vh;
+            color: var(--color-gold-light);
+            letter-spacing: 0.8rem;
+            margin-top: 1vh;
+            opacity: 0.8;
+            text-transform: uppercase;
+        }
+
+        /* Center Stage for Horse and Names */
+        .stage {
+            position: relative;
+            width: 80vw;
+            height: 50vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            perspective: 1000px;
+        }
+
+        /* The Horse Container */
+        .horse-wrapper {
+            position: absolute;
+            bottom: -5vh; 
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50vh; /* Increased size for impact */
+            height: 50vh;
+            z-index: 15;
+            filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5));
+        }
+        
+        .horse-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            /* Animation to simulate galloping/bobbing */
+            animation: gallop 0.6s ease-in-out infinite alternate;
+        }
+
+        @keyframes gallop {
+             0% { transform: translateY(0) rotate(0deg); }
+             100% { transform: translateY(-15px) rotate(2deg); }
+        }
+
+        /* The Lottery Name Display */
+        .lottery-display {
+            position: relative;
+            z-index: 40; /* Ensure on top */
+            width: 100%;
+            text-align: center;
+        }
+
+        /* Rolling Names (Idle/Running State) */
+        .name-roller {
+            font-family: var(--font-calligraphy);
+            font-size: 15vh;
+            color: var(--color-cream);
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
+            white-space: nowrap;
+            overflow: hidden;
+            height: 20vh;
+            line-height: 20vh;
+            opacity: 0.9;
+        }
+
+        /* Winner Card (Result State) */
+        .winner-card {
+            display: none; /* Hidden by default */
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(142, 0, 0, 0.95);
+            border: 2px solid var(--color-gold);
+            box-shadow: 0 0 50px var(--color-gold);
+            padding: 40px;
+            border-radius: 20px;
+            transform: scale(0); /* For pop-in animation */
+            position: relative;
+            z-index: 30; /* Ensure it's above the horse */
+            max-width: 90vw;
+            max-height: 80vh;
+        }
+
+        .winner-label {
+            font-size: 3vh;
+            color: var(--color-gold-light);
+            margin-bottom: 2vh;
+        }
+
+        /* Single Winner */
+        .winner-name.single {
+            font-family: var(--font-calligraphy);
+            font-size: 12vh;
+            color: var(--color-gold);
+            text-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        /* Grid Winners */
+        .winner-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 20px;
+            width: 100%;
+        }
+        .winner-grid-item {
+            font-family: var(--font-calligraphy);
+            font-size: 5vh;
+            color: var(--color-gold);
+            text-shadow: 0 0 5px rgba(0,0,0,0.5);
+            padding: 10px;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--color-gold);
+            border-radius: 10px;
+        }
+
+        /* Helper for animations */
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        /* Controls - Visible and Styled */
+        .controls {
+            position: absolute;
+            bottom: 5vh;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .control-row {
+            display: flex;
+            gap: 20px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(to bottom, var(--color-gold), #BF953F);
+            border: 2px solid #FFF;
+            padding: 15px 50px;
+            color: var(--color-red-deep);
+            font-size: 2rem;
+            font-family: var(--font-serif);
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 50px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:active {
+            transform: scale(0.95);
+        }
+
+        .btn-secondary {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--color-gold-light);
+            padding: 10px 20px;
+            color: var(--color-gold-light);
+            font-size: 1rem;
+            cursor: pointer;
+            border-radius: 30px;
+            backdrop-filter: blur(5px);
+            transition: all 0.3s ease;
+        }
+        .btn-secondary:hover {
+            background: rgba(0,0,0,0.5);
+        }
+        
+        .btn-secondary.active {
+            background: var(--color-gold);
+            color: var(--color-red-deep);
+            font-weight: bold;
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="bg-canvas"></canvas>
+
+    <div id="app-container">
+        <!-- Header -->
+        <header class="header">
+            <h1 class="title">马到成功 · 鸿运当头</h1>
+            <div class="subtitle">2026 ANNUAL GALA LUCKY DRAW</div>
+        </header>
+
+        <!-- Main Stage -->
+        <div class="stage">
+            
+            <!-- Horse Image -->
+            <div class="horse-wrapper" id="horse-container">
+                <img src="horse.png" alt="Running Horse" class="horse-img">
+            </div>
+
+            <!-- Name Roller -->
+            <div class="lottery-display">
+                <div id="name-roller" class="name-roller">准备抽奖</div>
+                
+                <div id="winner-card" class="winner-card">
+                    <div class="winner-label">恭喜</div>
+                    <!-- Container for Winner Names (Single or Grid) -->
+                    <div id="winner-container" class="winner-name single"></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Visible Controls -->
+    <div class="controls">
+        <div class="control-row">
+            <button class="btn-secondary active" onclick="setBatchSize(1)">抽 1 人</button>
+            <button class="btn-secondary" onclick="setBatchSize(5)">抽 5 人</button>
+            <button class="btn-secondary" onclick="setBatchSize(10)">抽 10 人</button>
+        </div>
+        <div class="control-row">
+            <button id="btn-action" class="btn-primary">开始抽奖</button>
+            <button id="btn-reset" class="btn-secondary">重置</button>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="bg.js"></script>
+    <script src="logic.js"></script>
+</body>
+</html>

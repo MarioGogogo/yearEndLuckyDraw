@@ -18,10 +18,15 @@ function loadSettings() {
     const cached = localStorage.getItem('lottery_settings')
     if (cached) {
       const settings = JSON.parse(cached)
-      pageMode.value = settings.pageMode || 'yima'
+      pageMode.value = settings.pageMode || 'sphere3d'
+    } else {
+      // 默认使用 3D 球形大屏
+      pageMode.value = 'sphere3d'
     }
   } catch (e) {
     console.error('加载设置失败:', e)
+    // 默认使用 3D 球形大屏
+    pageMode.value = 'sphere3d'
   }
 }
 

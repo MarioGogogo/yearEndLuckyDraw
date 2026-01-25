@@ -40,8 +40,8 @@ const defaultSettings = {
   autoSaveInterval: 30,            // 自动保存间隔（秒）
 
   // 显示设置
-  showWinnerAvatar: true,          // 显示中奖人头像
-  showWinnerDept: true,            // 显示中奖人部门
+  showWinnerAvatar: false,         // 显示中奖人头像
+  showWinnerDept: false,           // 显示中奖人部门
   barrageEnabled: true,            // 开启弹幕
   confirmBeforeAward: false         // 颁奖前确认
 }
@@ -49,6 +49,47 @@ const defaultSettings = {
 // 本地状态
 const settings = ref({ ...defaultSettings })
 const hasChanges = ref(false)
+
+// ========== 自定义弹窗状态 ==========
+const showModal = ref(false)
+const modalType = ref('confirm') // confirm | alert
+const modalTitle = ref('')
+const modalMessage = ref('')
+const modalOnConfirm = ref(null)
+const modalLoading = ref(false)
+
+// 显示确认弹窗
+function showConfirmModal(title, message, onConfirm) {
+  modalType.value = 'confirm'
+  modalTitle.value = title
+  modalMessage.value = message
+  modalOnConfirm.value = onConfirm
+  showModal.value = true
+}
+
+// 显示提示弹窗
+function showAlertModal(title, message) {
+  modalType.value = 'alert'
+  modalTitle.value = title
+  modalMessage.value = message
+  modalOnConfirm.value = null
+  showModal.value = true
+}
+
+// 弹窗确认
+function handleModalConfirm() {
+  if (modalOnConfirm.value) {
+    modalLoading.value = true
+    modalOnConfirm.value()
+    modalLoading.value = false
+  }
+  showModal.value = false
+}
+
+// 弹窗取消/关闭
+function handleModalClose() {
+  showModal.value = false
+}
 
 // 加载缓存
 function loadFromCache() {
@@ -87,10 +128,15 @@ function handleSave() {
 
 // 重置按钮
 function handleReset() {
-  if (confirm('确定要恢复默认设置吗？')) {
-    settings.value = { ...defaultSettings }
-    saveToCache()
-  }
+  showConfirmModal(
+    '恢复默认设置',
+    '确定要恢复所有设置为默认值吗？\n\n此操作将清除所有当前配置，且无法撤销。',
+    () => {
+      settings.value = { ...defaultSettings }
+      saveToCache()
+      showAlertModal('操作成功', '已恢复所有设置为默认值')
+    }
+  )
 }
 
 // 速度选项
@@ -540,6 +586,39 @@ function handleOutsideClick(e) {
       </div>
     </div>
   </div>
+
+  <!-- 自定义弹窗 -->
+  <Teleport to="body">
+    <Transition name="modal">
+      <div v-if="showModal" class="modal-overlay" @click.self="handleModalClose">
+        <div class="modal-container">
+          <div class="modal-header">
+            <h3 class="modal-title">{{ modalTitle }}</h3>
+            <button class="modal-close" @click="handleModalClose">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="modal-icon" :class="{ 'icon-alert': modalType === 'alert', 'icon-confirm': modalType === 'confirm' }">
+              <span class="material-symbols-outlined">
+                {{ modalType === 'alert' ? 'check_circle' : 'help' }}
+              </span>
+            </div>
+            <p class="modal-message">{{ modalMessage }}</p>
+          </div>
+          <div class="modal-footer">
+            <button v-if="modalType === 'confirm'" class="modal-btn modal-btn-cancel" @click="handleModalClose">
+              取消
+            </button>
+            <button class="modal-btn modal-btn-confirm" :class="{ 'loading': modalLoading }" @click="handleModalConfirm" :disabled="modalLoading">
+              <span v-if="modalLoading" class="loading-spinner"></span>
+              <span>{{ modalLoading ? '处理中...' : '确定' }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -1188,6 +1267,209 @@ function handleOutsideClick(e) {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.75rem;
+  }
+}
+</style>
+
+<style>
+/* 自定义弹窗样式 - 全局样式 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.modal-container {
+  background: white;
+  border-radius: 1rem;
+  width: 90%;
+  max-width: 420px;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.dark .modal-container {
+  background: #1f1a1a;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.dark .modal-header {
+  border-color: #3d2a2a;
+}
+
+.modal-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #181111;
+}
+
+.dark .modal-title {
+  color: white;
+}
+
+.modal-close {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: #8a6060;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.modal-close:hover {
+  background: rgba(244, 37, 37, 0.1);
+  color: #f42525;
+}
+
+.modal-body {
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+
+.modal-icon {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  margin: 0 auto 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-icon.icon-alert {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.modal-icon.icon-confirm {
+  background: rgba(244, 37, 37, 0.15);
+  color: #f42525;
+}
+
+.modal-icon :deep(.material-symbols-outlined) {
+  font-size: 2.5rem;
+}
+
+.modal-message {
+  font-size: 1rem;
+  color: #374151;
+  line-height: 1.6;
+}
+
+.dark .modal-message {
+  color: #d1d5db;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  background: #f8f5f5;
+  border-top: 1px solid #f0f0f0;
+}
+
+.dark .modal-footer {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: #3d2a2a;
+}
+
+.modal-btn {
+  min-width: 100px;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.modal-btn-cancel {
+  background: white;
+  border: 1px solid #e5e7eb;
+  color: #6b7280;
+}
+
+.modal-btn-cancel:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.dark .modal-btn-cancel {
+  background: #374151;
+  border-color: #4b5563;
+  color: #9ca3af;
+}
+
+.dark .modal-btn-cancel:hover {
+  background: #4b5563;
+}
+
+.modal-btn-confirm {
+  background: #f42525;
+  border: none;
+  color: white;
+}
+
+.modal-btn-confirm:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.modal-btn-confirm:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* 弹窗动画 */
+.modal-enter-active,
+.modal-leave-active {
+  transition: all 0.3s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+
+.modal-enter-from .modal-container,
+.modal-leave-to .modal-container {
+  transform: scale(0.9) translateY(20px);
+}
+
+/* loading spinner */
+.loading-spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 </style>

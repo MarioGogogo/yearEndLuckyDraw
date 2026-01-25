@@ -23,7 +23,6 @@ defineProps({
         <p class="stat-label">奖项类别总数</p>
         <div class="stat-content">
           <span class="stat-value">{{ prizeCount }}</span>
-          <span class="stat-badge">比去年 +2</span>
         </div>
       </div>
 

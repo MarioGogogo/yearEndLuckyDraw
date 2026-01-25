@@ -2,70 +2,61 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import * as XLSX from 'xlsx'
 
+// 导入缓存管理和抽奖算法模块
+import {
+  loadParticipants,
+  saveParticipants,
+  loadWinnerRecords,
+  saveWinnerRecords,
+  deleteWinnersByPrizeName
+} from '../../utils/lotteryStorage'
+
 // 缓存 key
 const STORAGE_KEY = 'lottery_winner_records'
 
-// 模拟中奖记录数据
-const defaultRecords = [
-  {
-    id: 1,
-    prizeName: '特等奖：赤兔限量版座驾',
-    prizeImage: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBTPT5c1OskG2SjZXidj5kJHZL7KK8m_raA_As75THnywPNmum1AYM3HV3i2M9b7h7xCj3PQV6k7SqvH9I6yoBk9IbLqQgZkj-ZQgH1we-fhsbY-KvLdwKh2JasQhQdCSFduVHtYKQLPZW8VzGAkTGcL_MyrUB2jvfspIKXsqnmqdDHIF63fH_iiS3E-yZubCcpEJWbTFVSV1445uyPUOVQQCvJSE2iMU5n4YHTnkQzAZh5iYoeQdLV-Z3LEn5qs1Yxq3PPXgpDMj0',
-    winnerName: '张伟',
-    winnerDept: '工程部',
-    winnerContact: 'zhang.wei@corp.com',
-    drawTime: '2026-01-20 14:30:25',
-    status: 'claimed',
-    claimedTime: '2026-01-20 15:00:00'
-  },
-  {
-    id: 2,
-    prizeName: '一等奖：极客探索套装',
-    prizeImage: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCqAZhncTE-HPs-80vCYLlCOE3i_P2_kL90YJY45wOTt799M4vxqUJQgiRnfyzxwyWvUC9_NNDMYtZYTs1TBTSv1aCYXA_2HS6FcIZsAAHLVG5ZjYQ7u7FSqVLrxKcqgzPfyhI9UFDS96UnsD47gWw-_HcgTe6DSfjLiXK6RejfwrfxMNTdAS0JKhhgYufwb5Qs1aVaETfTnbaYDuO00c9xVwBfucBk2rP-4icgPyVB2cYqxTFxZgh42foW8TE2Ehd-4kuun0O4h7Q',
-    winnerName: '李丽',
-    winnerDept: '市场部',
-    winnerContact: 'l.li@corp.com',
-    drawTime: '2026-01-20 15:45:12',
-    status: 'claimed',
-    claimedTime: '2026-01-20 16:20:00'
-  },
-  {
-    id: 3,
-    prizeName: '二等奖：创意办公全家桶',
-    prizeImage: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAZeBAkzyDB57QbQ_NlBX78EwzP2S2Z7V99Sz9QMDXqwi-X9k6PqRVKv9vn1Vj9KzL2A8N92ttW2GXzwyxesxkoeBqmI0zJG7ql9ZxQgRJKnhaSiZi_qSQ7fRqHjYW4UFbRovuwqfcljNwXyoaEfjlnA5NSqJl095m4XCLB-_Mzolhg1ptBDsopPY-OTrMH1tPdqd7Z4WWdxAtKIVTZ-o8HR9Q6cc5D2nZ6Vjm3S2-l-o_tgMlLSJn6yWJflk1szlhWpuHfPjDTQGY',
-    winnerName: '王晨',
-    winnerDept: '人力资源部',
-    winnerContact: 'c.wang@corp.com',
-    drawTime: '2026-01-20 16:30:45',
-    status: 'pending',
-    claimedTime: null
-  },
-  {
-    id: 4,
-    prizeName: '二等奖：创意办公全家桶',
-    prizeImage: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAZeBAkzyDB57QbQ_NlBX78EwzP2S2Z7V99Sz9QMDXqwi-X9k6PqRVKv9vn1Vj9KzL2A8N92ttW2GXzwyxesxkoeBqmI0zJG7ql9ZxQgRJKnhaSiZi_qSQ7fRqHjYW4UFbRovuwqfcljNwXyoaEfjlnA5NSqJl095m4XCLB-_Mzolhg1ptBDsopPY-OTrMH1tPdqd7Z4WWdxAtKIVTZ-o8HR9Q6cc5D2nZ6Vjm3S2-l-o_tgMlLSJn6yWJflk1szlhWpuHfPjDTQGY',
-    winnerName: '杨敏',
-    winnerDept: '产品设计部',
-    winnerContact: 'y.min@corp.com',
-    drawTime: '2026-01-20 16:35:22',
-    status: 'claimed',
-    claimedTime: '2026-01-20 17:00:00'
-  },
-  {
-    id: 5,
-    prizeName: '二等奖：创意办公全家桶',
-    prizeImage: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAZeBAkzyDB57QbQ_NlBX78EwzP2S2Z7V99Sz9QMDXqwi-X9k6PqRVKv9vn1Vj9KzL2A8N92ttW2GXzwyxesxkoeBqmI0zJG7ql9ZxQgRJKnhaSiZi_qSQ7fRqHjYW4UFbRovuwqfcljNwXyoaEfjlnA5NSqJl095m4XCLB-_Mzolhg1ptBDsopPY-OTrMH1tPdqd7Z4WWdxAtKIVTZ-o8HR9Q6cc5D2nZ6Vjm3S2-l-o_tgMlLSJn6yWJflk1szlhWpuHfPjDTQGY',
-    winnerName: '刘洋',
-    winnerDept: '财务部',
-    winnerContact: 'y.liu@corp.com',
-    drawTime: '2026-01-20 16:40:18',
-    status: 'expired',
-    claimedTime: null
-  }
-]
+// ========== 自定义弹窗状态 ==========
+const showModal = ref(false)
+const modalType = ref('confirm') // confirm | alert
+const modalTitle = ref('')
+const modalMessage = ref('')
+const modalOnConfirm = ref(null)
+const modalLoading = ref(false)
 
-// 本地状态
-const records = ref([...defaultRecords])
+// 显示确认弹窗
+function showConfirmModal(title, message, onConfirm) {
+  modalType.value = 'confirm'
+  modalTitle.value = title
+  modalMessage.value = message
+  modalOnConfirm.value = onConfirm
+  showModal.value = true
+}
+
+// 显示提示弹窗
+function showAlertModal(title, message) {
+  modalType.value = 'alert'
+  modalTitle.value = title
+  modalMessage.value = message
+  modalOnConfirm.value = null
+  showModal.value = true
+}
+
+// 弹窗确认
+function handleModalConfirm() {
+  if (modalOnConfirm.value) {
+    modalLoading.value = true
+    modalOnConfirm.value()
+    modalLoading.value = false
+  }
+  showModal.value = false
+}
+
+// 弹窗取消/关闭
+function handleModalClose() {
+  showModal.value = false
+}
+
+// 本地状态（初始为空，从缓存加载）
+const records = ref([])
 const isLoading = ref(false)
 
 // 搜索/筛选
@@ -99,6 +90,31 @@ function selectPrize(value) {
 function selectStatus(value) {
   statusFilter.value = value
   statusDropdownOpen.value = false
+}
+
+// 按奖项清空记录的状态
+const showClearPrizeModal = ref(false)
+const selectedPrizeToClear = ref('')
+const clearPrizeLoading = ref(false)
+
+function confirmClearPrizeRecords() {
+  if (!selectedPrizeToClear.value) return
+
+  clearPrizeLoading.value = true
+  try {
+    const result = deleteWinnersByPrizeName(selectedPrizeToClear.value)
+    showAlertModal(
+      '清空成功',
+      `已删除 ${result.deletedCount} 条中奖记录，${result.participantsReset} 位中奖人已重置为待抽奖状态`
+    )
+    loadFromCache() // 刷新列表
+  } catch (e) {
+    showAlertModal('操作失败', '清空记录时发生错误')
+  } finally {
+    clearPrizeLoading.value = false
+    showClearPrizeModal.value = false
+    selectedPrizeToClear.value = ''
+  }
 }
 
 const statusOptions = [
@@ -270,6 +286,33 @@ function exportRecords() {
   XLSX.writeFile(workbook, `中奖记录_${new Date().toLocaleDateString()}.xlsx`)
 }
 
+// 重置中奖人参与状态
+function resetParticipantStatus(record) {
+  showConfirmModal(
+    '重置参与状态',
+    `确定要将 "${record.winnerName}" 的参与状态重置为待抽奖吗？\n\n注意：此操作将从中奖名单中移除该记录，且无法撤销。`,
+    () => {
+      // 1. 更新参与人员状态为待抽奖
+      const participants = loadParticipants()
+      const participantIndex = participants.findIndex(p =>
+        p.name === record.winnerName && p.department === record.winnerDept
+      )
+
+      if (participantIndex !== -1) {
+        participants[participantIndex].status = 'pending'
+        participants[participantIndex].winTime = null
+        saveParticipants(participants)
+      }
+
+      // 2. 从当前中奖记录列表中移除该记录
+      records.value = records.value.filter(r => r.id !== record.id)
+      saveToCache()
+
+      showAlertModal('操作成功', `已将 "${record.winnerName}" 重置为待抽奖状态，并从名单中移除`)
+    }
+  )
+}
+
 // 初始化
 onMounted(() => {
   loadFromCache()
@@ -421,6 +464,12 @@ watch([searchQuery, statusFilter, prizeFilter], () => {
         <span class="material-symbols-outlined">clear</span>
         重置
       </button>
+
+      <!-- 清空奖项记录按钮 -->
+      <button class="clear-btn" @click="showClearPrizeModal = true">
+        <span class="material-symbols-outlined">delete_sweep</span>
+        清空奖项记录
+      </button>
     </div>
 
     <!-- 中奖记录表格 -->
@@ -481,15 +530,9 @@ watch([searchQuery, statusFilter, prizeFilter], () => {
               </td>
               <td class="td-actions">
                 <div class="action-buttons">
-                  <button class="action-icon-btn" title="查看详情">
-                    <span class="material-symbols-outlined">visibility</span>
-                  </button>
-                  <button v-if="record.status === 'pending'"
-                          class="action-icon-btn" title="标记已领取">
-                    <span class="material-symbols-outlined">check_circle</span>
-                  </button>
-                  <button class="action-icon-btn" title="发送通知">
-                    <span class="material-symbols-outlined">notifications</span>
+                  <button class="action-btn action-reset" @click="resetParticipantStatus(record)">
+                    <span class="material-symbols-outlined">restart_alt</span>
+                    <span>重置参与状态</span>
                   </button>
                 </div>
               </td>
@@ -539,6 +582,89 @@ watch([searchQuery, statusFilter, prizeFilter], () => {
       </div>
     </div>
   </div>
+
+  <!-- 自定义弹窗 -->
+  <Teleport to="body">
+    <Transition name="modal">
+      <div v-if="showModal" class="modal-overlay" @click.self="handleModalClose">
+        <div class="modal-container">
+          <div class="modal-header">
+            <h3 class="modal-title">{{ modalTitle }}</h3>
+            <button class="modal-close" @click="handleModalClose">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="modal-icon" :class="{ 'icon-alert': modalType === 'alert', 'icon-confirm': modalType === 'confirm' }">
+              <span class="material-symbols-outlined">
+                {{ modalType === 'alert' ? 'check_circle' : 'help' }}
+              </span>
+            </div>
+            <p class="modal-message">{{ modalMessage }}</p>
+          </div>
+          <div class="modal-footer">
+            <button v-if="modalType === 'confirm'" class="modal-btn modal-btn-cancel" @click="handleModalClose">
+              取消
+            </button>
+            <button class="modal-btn modal-btn-confirm" :class="{ 'loading': modalLoading }" @click="handleModalConfirm" :disabled="modalLoading">
+              <span v-if="modalLoading" class="loading-spinner"></span>
+              <span>{{ modalLoading ? '处理中...' : '确定' }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- 清空奖项记录弹窗 -->
+  <Teleport to="body">
+    <Transition name="modal">
+      <div v-if="showClearPrizeModal" class="modal-overlay" @click.self="showClearPrizeModal = false">
+        <div class="modal-container">
+          <div class="modal-header">
+            <h3 class="modal-title">清空奖项中奖记录</h3>
+            <button class="modal-close" @click="showClearPrizeModal = false">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="modal-icon icon-confirm">
+              <span class="material-symbols-outlined">warning</span>
+            </div>
+            <p class="modal-message">
+              确定要清空该奖项的所有中奖记录吗？<br><br>
+              <strong>此操作将：</strong><br>
+              • 删除该奖项的所有中奖记录<br>
+              • 将相关中奖人重置为待抽奖状态<br>
+              • 大屏抽奖界面将重新显示该奖项
+            </p>
+            <div class="form-group">
+              <label>选择要清空的奖项：</label>
+              <select v-model="selectedPrizeToClear" class="form-select">
+                <option value="">请选择奖项</option>
+                <option v-for="name in prizeNames" :key="name" :value="name">
+                  {{ name }}
+                </option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="modal-btn modal-btn-cancel" @click="showClearPrizeModal = false">
+              取消
+            </button>
+            <button
+              class="modal-btn modal-btn-confirm"
+              :disabled="!selectedPrizeToClear || clearPrizeLoading"
+              @click="confirmClearPrizeRecords"
+            >
+              <span v-if="clearPrizeLoading" class="loading-spinner"></span>
+              {{ clearPrizeLoading ? '处理中...' : '确定清空' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -895,6 +1021,35 @@ watch([searchQuery, statusFilter, prizeFilter], () => {
   color: #f42525;
 }
 
+/* 清空奖项记录按钮 */
+.clear-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  background: rgba(244, 37, 37, 0.1);
+  border: 1px solid #f42525;
+  border-radius: 1rem;
+  font-size: 0.875rem;
+  color: #f42525;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+:global(.dark) .clear-btn {
+  background: rgba(244, 37, 37, 0.15);
+  border-color: #f42525;
+  color: #f87171;
+}
+
+.clear-btn:hover {
+  background: rgba(244, 37, 37, 0.2);
+}
+
+.clear-btn :deep(.material-symbols-outlined) {
+  font-size: 1.1rem;
+}
+
 /* 表格容器 */
 .table-container {
   background: white;
@@ -1157,35 +1312,36 @@ watch([searchQuery, statusFilter, prizeFilter], () => {
 /* 操作列 */
 .td-actions {
   text-align: right;
+  min-width: 160px;
 }
 
 .action-buttons {
   display: flex;
   justify-content: flex-end;
-  gap: 0.25rem;
+  gap: 0.5rem;
 }
 
-.action-icon-btn {
-  padding: 0.5rem;
-  background: transparent;
-  border: none;
-  border-radius: 50%;
-  color: #8a6060;
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem;
+  background: rgba(244, 37, 37, 0.1);
+  border: 1px solid #f42525;
+  border-radius: 0.5rem;
+  color: #f42525;
+  font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
 }
 
-:global(.dark) .action-icon-btn {
-  color: #9ca3af;
+.action-btn:hover {
+  background: rgba(244, 37, 37, 0.2);
 }
 
-.action-icon-btn:hover {
-  background: rgba(244, 37, 37, 0.1);
-  color: #f42525;
-}
-
-.action-icon-btn :deep(.material-symbols-outlined) {
-  font-size: 1.25rem;
+.action-btn :deep(.material-symbols-outlined) {
+  font-size: 1rem;
 }
 
 /* 空状态 */
@@ -1336,5 +1492,250 @@ watch([searchQuery, statusFilter, prizeFilter], () => {
   .filter-select {
     width: 100%;
   }
+}
+</style>
+
+<style>
+/* 自定义弹窗样式 - 全局样式 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.modal-container {
+  background: white;
+  border-radius: 1rem;
+  width: 90%;
+  max-width: 420px;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.dark .modal-container {
+  background: #1f1a1a;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.dark .modal-header {
+  border-color: #3d2a2a;
+}
+
+.modal-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #181111;
+}
+
+.dark .modal-title {
+  color: white;
+}
+
+.modal-close {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: #8a6060;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.modal-close:hover {
+  background: rgba(244, 37, 37, 0.1);
+  color: #f42525;
+}
+
+.modal-body {
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+
+.modal-icon {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  margin: 0 auto 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-icon.icon-alert {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.modal-icon.icon-confirm {
+  background: rgba(244, 37, 37, 0.15);
+  color: #f42525;
+}
+
+.modal-icon :deep(.material-symbols-outlined) {
+  font-size: 2.5rem;
+}
+
+.modal-message {
+  font-size: 1rem;
+  color: #374151;
+  line-height: 1.6;
+}
+
+.dark .modal-message {
+  color: #d1d5db;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  background: #f8f5f5;
+  border-top: 1px solid #f0f0f0;
+}
+
+.dark .modal-footer {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: #3d2a2a;
+}
+
+.modal-btn {
+  min-width: 100px;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.modal-btn-cancel {
+  background: white;
+  border: 1px solid #e5e7eb;
+  color: #6b7280;
+}
+
+.modal-btn-cancel:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.dark .modal-btn-cancel {
+  background: #374151;
+  border-color: #4b5563;
+  color: #9ca3af;
+}
+
+.dark .modal-btn-cancel:hover {
+  background: #4b5563;
+}
+
+.modal-btn-confirm {
+  background: #f42525;
+  border: none;
+  color: white;
+}
+
+.modal-btn-confirm:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.modal-btn-confirm:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* 弹窗动画 */
+.modal-enter-active,
+.modal-leave-active {
+  transition: all 0.3s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+
+.modal-enter-from .modal-container,
+.modal-leave-to .modal-container {
+  transform: scale(0.9) translateY(20px);
+}
+
+/* loading spinner */
+.loading-spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 表单样式 */
+.form-group {
+  margin-top: 1.5rem;
+  text-align: left;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+.dark .form-group label {
+  color: #d1d5db;
+}
+
+.form-select {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: #f8f5f5;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  color: #181111;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dark .form-select {
+  background: #374151;
+  border-color: #4b5563;
+  color: white;
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: #f42525;
+  box-shadow: 0 0 0 3px rgba(244, 37, 37, 0.1);
 }
 </style>

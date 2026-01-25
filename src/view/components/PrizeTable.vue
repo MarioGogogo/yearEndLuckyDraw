@@ -112,7 +112,6 @@ function getStatusText(status) {
               <th class="th-info">奖项信息</th>
               <th class="th-center">发放数量</th>
               <th class="th-center">奖品金额</th>
-              <th class="th-center">回池重抽</th>
               <th class="th-status">当前状态</th>
               <th class="th-actions text-right">操作</th>
             </tr>
@@ -142,16 +141,6 @@ function getStatusText(status) {
               </td>
               <td class="td-center">
                 <span class="amount">¥{{ prize.amount?.toLocaleString() }}</span>
-              </td>
-              <td class="td-center">
-                <label class="toggle-switch">
-                  <input
-                    type="checkbox"
-                    :checked="prize.canReset"
-                    @change="toggleResetPool(prize)"
-                  />
-                  <span class="toggle-slider"></span>
-                </label>
               </td>
               <td class="td-status">
                 <span :class="['status-badge', getStatusClass(prize.status)]">
