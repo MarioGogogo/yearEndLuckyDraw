@@ -255,17 +255,6 @@ function handleOutsideClick(e) {
             </label>
           </div>
 
-          <div class="setting-item">
-            <div class="setting-info">
-              <label>回池重抽</label>
-              <p>中奖人不在场时将名额放回奖池</p>
-            </div>
-            <label class="toggle-switch">
-              <input v-model="settings.resetPoolEnabled" type="checkbox" />
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-
           <div v-if="!settings.allowRepeatWins" class="setting-item">
             <div class="setting-info">
               <label>个人中奖上限</label>

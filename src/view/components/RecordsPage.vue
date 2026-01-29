@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as XLSX from 'xlsx'
 
 // 导入缓存管理和抽奖算法模块
@@ -96,6 +96,71 @@ function selectStatus(value) {
 const showClearPrizeModal = ref(false)
 const selectedPrizeToClear = ref('')
 const clearPrizeLoading = ref(false)
+const clearPrizeDropdownOpen = ref(false)
+
+function toggleClearPrizeDropdown() {
+  clearPrizeDropdownOpen.value = !clearPrizeDropdownOpen.value
+}
+
+function selectClearPrize(name) {
+  selectedPrizeToClear.value = name
+  clearPrizeDropdownOpen.value = false
+}
+
+// 计算下拉菜单位置
+const clearDropdownStyle = ref({})
+
+function updateClearDropdownPosition() {
+  const trigger = document.querySelector('.clear-prize-dropdown-trigger')
+  if (trigger) {
+    const rect = trigger.getBoundingClientRect()
+    clearDropdownStyle.value = {
+      position: 'fixed',
+      top: `${rect.bottom + 8}px`,
+      left: `${rect.left}px`,
+      width: `${rect.width}px`,
+      maxHeight: '200px',
+      overflowY: 'auto',
+      zIndex: 10000
+    }
+  }
+}
+
+watch(clearPrizeDropdownOpen, (val) => {
+  if (val) {
+    nextTick(() => updateClearDropdownPosition())
+  }
+})
+
+// 一键清空所有中奖记录和状态
+function clearAllWinnerRecords() {
+  showConfirmModal(
+    '清空所有中奖记录',
+    '确定要清空所有中奖记录并将所有中奖人重置为待抽奖状态吗？此操作将清除所有中奖数据，且无法撤销。',
+    () => {
+      // 1. 重置所有参与人员的状态
+      const participants = loadParticipants()
+      let resetCount = 0
+      participants.forEach(p => {
+        if (p.status === 'won') {
+          p.status = 'pending'
+          p.winTime = null
+          resetCount++
+        }
+      })
+      saveParticipants(participants)
+
+      // 2. 清空中奖记录
+      saveWinnerRecords([])
+
+      showAlertModal(
+        '清空成功',
+        `已重置 ${resetCount} 位中奖人的状态，并清空所有中奖记录`
+      )
+      loadFromCache() // 刷新列表
+    }
+  )
+}
 
 function confirmClearPrizeRecords() {
   if (!selectedPrizeToClear.value) return
@@ -328,6 +393,7 @@ function handleOutsideClick(e) {
   if (!dropdown) {
     prizeDropdownOpen.value = false
     statusDropdownOpen.value = false
+    clearPrizeDropdownOpen.value = false
   }
 }
 
@@ -469,6 +535,11 @@ watch([searchQuery, statusFilter, prizeFilter], () => {
       <button class="clear-btn" @click="showClearPrizeModal = true">
         <span class="material-symbols-outlined">delete_sweep</span>
         清空奖项记录
+      </button>
+      <!-- 一键清空所有按钮 -->
+      <button class="clear-all-btn" @click="clearAllWinnerRecords">
+        <span class="material-symbols-outlined">warning</span>
+        一键清空所有
       </button>
     </div>
 
@@ -640,12 +711,27 @@ watch([searchQuery, statusFilter, prizeFilter], () => {
             </p>
             <div class="form-group">
               <label>选择要清空的奖项：</label>
-              <select v-model="selectedPrizeToClear" class="form-select">
-                <option value="">请选择奖项</option>
-                <option v-for="name in prizeNames" :key="name" :value="name">
-                  {{ name }}
-                </option>
-              </select>
+              <div class="custom-dropdown" style="width: 100%;">
+                <button class="dropdown-trigger clear-prize-dropdown-trigger" @click.stop="toggleClearPrizeDropdown">
+                  <span class="trigger-text">{{ selectedPrizeToClear || '请选择奖项' }}</span>
+                  <span class="dropdown-arrow" :class="{ open: clearPrizeDropdownOpen }">▼</span>
+                </button>
+              </div>
+              <Teleport to="body">
+                <Transition name="dropdown">
+                  <div v-if="clearPrizeDropdownOpen" class="clear-prize-dropdown" :style="clearDropdownStyle">
+                    <button
+                      v-for="name in prizeNames"
+                      :key="name"
+                      class="dropdown-item"
+                      :class="{ active: selectedPrizeToClear === name }"
+                      @click="selectClearPrize(name)"
+                    >
+                      {{ name }}
+                    </button>
+                  </div>
+                </Transition>
+              </Teleport>
             </div>
           </div>
           <div class="modal-footer">
@@ -1047,6 +1133,35 @@ watch([searchQuery, statusFilter, prizeFilter], () => {
 }
 
 .clear-btn :deep(.material-symbols-outlined) {
+  font-size: 1.1rem;
+}
+
+/* 一键清空所有按钮 */
+.clear-all-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid #ef4444;
+  border-radius: 1rem;
+  font-size: 0.875rem;
+  color: #ef4444;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+:global(.dark) .clear-all-btn {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: #ef4444;
+  color: #f87171;
+}
+
+.clear-all-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.clear-all-btn :deep(.material-symbols-outlined) {
   font-size: 1.1rem;
 }
 
@@ -1715,27 +1830,52 @@ watch([searchQuery, statusFilter, prizeFilter], () => {
   color: #d1d5db;
 }
 
-.form-select {
-  width: 100%;
-  padding: 0.75rem 1rem;
-  background: #f8f5f5;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  color: #181111;
-  cursor: pointer;
-  transition: all 0.2s;
+/* 清空奖项下拉菜单 */
+.clear-prize-dropdown {
+  background: white;
+  border: 2px solid #f42525;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
 }
 
-.dark .form-select {
-  background: #374151;
-  border-color: #4b5563;
+.dark .clear-prize-dropdown {
+  background: #1f1a1a;
+  border-color: #f42525;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+}
+
+.clear-prize-dropdown .dropdown-item {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: none;
+  border: none;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #181111;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.clear-prize-dropdown .dropdown-item:hover {
+  background: rgba(244, 37, 37, 0.08);
+}
+
+.clear-prize-dropdown .dropdown-item.active {
+  background: rgba(244, 37, 37, 0.12);
+  color: #f42525;
+}
+
+.dark .clear-prize-dropdown .dropdown-item {
   color: white;
 }
 
-.form-select:focus {
-  outline: none;
-  border-color: #f42525;
-  box-shadow: 0 0 0 3px rgba(244, 37, 37, 0.1);
+.dark .clear-prize-dropdown .dropdown-item:hover {
+  background: rgba(244, 37, 37, 0.15);
+}
+
+.dark .clear-prize-dropdown .dropdown-item.active {
+  background: rgba(244, 37, 37, 0.2);
 }
 </style>

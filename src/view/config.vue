@@ -80,7 +80,9 @@ const winnerCount = computed(() =>
   prizes.value.reduce((sum, prize) => sum + (prize.count || 0), 0)
 )
 
-const totalValue = computed(() => '¥88,888')
+const totalCount = computed(() =>
+  prizes.value.reduce((sum, prize) => sum + (prize.count || 0), 0)
+)
 
 // 加载缓存
 function loadFromCache() {
@@ -196,7 +198,7 @@ onMounted(() => {
         <StatsCards
           :prizeCount="prizeCount"
           :winnerCount="winnerCount"
-          :totalValue="totalValue"
+          :totalCount="totalCount"
         />
 
         <PrizeTable

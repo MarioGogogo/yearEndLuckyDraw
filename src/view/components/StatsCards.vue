@@ -8,9 +8,9 @@ defineProps({
     type: Number,
     default: 0
   },
-  totalValue: {
-    type: String,
-    default: '¥0'
+  totalCount: {
+    type: Number,
+    default: 0
   }
 })
 </script>
@@ -35,11 +35,11 @@ defineProps({
         </div>
       </div>
 
-      <!-- 奖品总价值卡片 -->
+      <!-- 奖项发放总数卡片 -->
       <div class="stat-card special-card">
-        <p class="stat-label special-label">奖品总价值</p>
+        <p class="stat-label special-label">奖项发放总数</p>
         <div class="stat-content">
-          <span class="stat-value special-value">{{ totalValue }}</span>
+          <span class="stat-value special-value">{{ totalCount }}</span>
           <span class="material-symbols-outlined special-icon">workspace_premium</span>
         </div>
       </div>

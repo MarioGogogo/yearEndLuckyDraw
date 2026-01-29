@@ -19,6 +19,7 @@ const isClosing = ref(false)
 const form = ref({
   name: '',
   count: 1,
+  batchCount: 1,
   amount: 1000,
   description: '',
   image: '',
@@ -31,6 +32,7 @@ watch(() => props.prize, (newPrize) => {
     form.value = {
       name: newPrize.name || '',
       count: newPrize.count || 1,
+      batchCount: newPrize.batchCount || 1,
       amount: newPrize.amount || 0,
       description: newPrize.description || '',
       image: newPrize.image || '',
@@ -41,6 +43,7 @@ watch(() => props.prize, (newPrize) => {
     form.value = {
       name: '',
       count: 1,
+      batchCount: 1,
       amount: 1000,
       description: '',
       image: '',
@@ -50,6 +53,17 @@ watch(() => props.prize, (newPrize) => {
 }, { immediate: true })
 
 function handleSave() {
+  // 验证：单次抽取不能大于发放数量
+  if (form.value.batchCount > form.value.count) {
+    alert('单次抽取人数不能大于发放数量！')
+    return
+  }
+  // 验证：奖项名称不能为空
+  if (!form.value.name.trim()) {
+    alert('请输入奖项名称！')
+    return
+  }
+
   if (isClosing.value) return
   isClosing.value = true
   emit('close')
@@ -119,7 +133,7 @@ function handleDrop(event) {
               />
             </div>
 
-            <!-- 数量和稀有度 -->
+            <!-- 数量设置 -->
             <div class="form-row">
               <div class="form-group">
                 <label>发放数量</label>
@@ -131,13 +145,13 @@ function handleDrop(event) {
                 />
               </div>
               <div class="form-group">
-                <label>奖品金额 (元)</label>
+                <label>单次抽取</label>
                 <input
-                  v-model.number="form.amount"
+                  v-model.number="form.batchCount"
                   type="number"
-                  min="0"
+                  min="1"
                   class="form-input"
-                  placeholder="请输入金额"
+                  placeholder="每次抽几人"
                 />
               </div>
             </div>
@@ -178,17 +192,6 @@ function handleDrop(event) {
               </div>
             </div>
 
-            <!-- 回池重抽开关 -->
-            <div class="toggle-card">
-              <div class="toggle-info">
-                <p class="toggle-title">回池重抽</p>
-                <p class="toggle-desc">若中奖人不在场，则将该名额重回奖池</p>
-              </div>
-              <label class="toggle-switch">
-                <input v-model="form.canReset" type="checkbox" />
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
           </div>
 
           <div class="modal-footer">

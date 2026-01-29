@@ -45,6 +45,24 @@ const isCurrentPrizeAvailable = computed(() => {
 const totalWinners = computed(() => winnerRecords.value.length)
 const totalParticipants = computed(() => allParticipants.value.length)
 
+// 单次抽取人数
+const batchCount = computed(() => currentPrize.value.batchCount || currentPrize.value.count || 1)
+
+// 奖项总人数
+const totalPrizeCount = computed(() => currentPrize.value.count || 0)
+
+// 已抽取人数
+const prizeDrawnCount = computed(() => winnerRecords.value.filter(r => r.prizeId === currentPrize.value.id).length)
+
+// 剩余可抽取人数
+const remainingCount = computed(() => Math.max(0, totalPrizeCount.value - prizeDrawnCount.value))
+
+// 预计还需抽取次数（向上取整）
+const remainingDraws = computed(() => {
+  if (remainingCount.value <= 0) return 0
+  return Math.ceil(remainingCount.value / batchCount.value)
+})
+
 // Helpers
 const getPrizeDrawCount = (prizeId) => {
   return winnerRecords.value.filter(r => r.prizeId === prizeId).length
@@ -61,6 +79,17 @@ const selectPrize = (index) => {
     showPrizeSelector.value = false
     resetScene()
 }
+
+// 切换到下一奖项（更高一级）
+const goToNextPrize = () => {
+    if (currentPrizeIndex.value > 0) {
+        currentPrizeIndex.value--
+        resetScene()
+    }
+}
+
+// 是否可以切换到下一奖项
+const canGoToNextPrize = computed(() => currentPrizeIndex.value > 0)
 
 // Three.js
 let scene, camera, renderer
@@ -101,8 +130,11 @@ const loadData = () => {
   
   if (storedPrizes && storedPrizes.length > 0) {
       prizes.value = storedPrizes
+      // 默认选中最后一个奖项（从大奖到小奖倒序抽奖）
+      currentPrizeIndex.value = Math.max(0, prizes.value.length - 1)
   } else {
       prizes.value = DEFAULT_PRIZES
+      currentPrizeIndex.value = 0
   }
   
   // For fallback data, eligible list logic needs to know they aren't in storage yet
@@ -414,7 +446,8 @@ const startDraw = () => {
   eliminatedCount = 0
 
   // 先确定中奖者
-  const count = currentPrize.value.count
+  // 使用 batchCount（单次抽取数量），默认为 count
+  const count = currentPrize.value.batchCount || currentPrize.value.count || 1
   const shuffled = [...eligibleList.value].sort(() => Math.random() - 0.5)
   const currentWinners = shuffled.slice(0, count)
   const winnerNames = new Set(currentWinners.map(w => w.name))
@@ -472,7 +505,7 @@ const stopDraw = () => {
 }
 
 const showWinnerList = () => {
-  const count = currentPrize.value.count
+  const count = currentPrize.value.batchCount || currentPrize.value.count || 1
   const currentWinners = []
 
   const shuffled = [...eligibleList.value].sort(() => Math.random() - 0.5)
@@ -603,7 +636,8 @@ const goBack = () => {
              
              <div class="prize-info">
                  <h1>{{ currentPrize.name || '幸运抽奖' }}</h1>
-                 <p v-if="currentPrize.count">名额: {{ currentPrize.count }}</p>
+                 <p v-if="totalPrizeCount">名额: {{ totalPrizeCount }} (一次抽 {{ batchCount }} 人)</p>
+                 <p v-if="remainingDraws > 0" class="remaining-draws">还需 {{ remainingDraws }} 次抽完</p>
              </div>
              
              <div class="stat-box">
@@ -617,6 +651,7 @@ const goBack = () => {
              <button class="action-btn" @click="toggleDraw">
                 {{ drawStatus !== 'idle' && drawStatus !== 'result' ? '停止' : '开始抽奖' }}
              </button>
+             <span class="keyboard-hint">按空格键也可以</span>
         </div>
 
         <!-- 中奖名单显示 -->
@@ -637,23 +672,32 @@ const goBack = () => {
         <!-- Prize Selector (Bottom Left) -->
         <div class="prize-selector-container">
             <button class="prize-select-btn" @click="togglePrizeSelector">
-                {{ currentPrize.name }} 
+                {{ currentPrize.name }}
                 <span class="arrow">{{ showPrizeSelector ? '▲' : '▼' }}</span>
             </button>
             <transition name="fade">
               <div v-if="showPrizeSelector" class="prize-dropdown">
-                  <div 
-                      v-for="(p, i) in prizes" 
+                  <div
+                      v-for="(p, i) in prizes"
                       :key="i"
                       class="prize-option"
                       :class="{ active: i === currentPrizeIndex }"
                       @click="selectPrize(i)"
                   >
-                      {{ p.name }} 
-                      <span v-if="isPrizeCompleted(p)" class="badge">已完</span>
+                      {{ p.name }}
                   </div>
               </div>
             </transition>
+            <!-- 下一奖项按钮 -->
+            <button
+                v-if="canGoToNextPrize"
+                class="next-prize-btn"
+                @click="goToNextPrize"
+                title="切换到高一级奖项"
+            >
+                <span class="material-symbols-outlined">arrow_upward</span>
+                下一奖项
+            </button>
         </div>
         
         <!-- Back Button (Bottom Right) -->
@@ -732,6 +776,13 @@ const goBack = () => {
   opacity: 0.8;
 }
 
+.prize-info .remaining-draws {
+  font-size: 0.9rem;
+  opacity: 0.7;
+  color: rgba(255, 215, 0, 0.8);
+  margin-top: 0.25rem;
+}
+
 /* Controls */
 .controls {
   position: absolute;
@@ -739,6 +790,15 @@ const goBack = () => {
   left: 50%;
   transform: translateX(-50%);
   pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.keyboard-hint {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.6);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .action-btn {
@@ -821,6 +881,9 @@ const goBack = () => {
     bottom: 2rem;
     left: 2rem;
     pointer-events: auto;
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
 }
 
 .prize-select-btn {
@@ -871,6 +934,32 @@ const goBack = () => {
     padding: 2px 5px;
     border-radius: 4px;
     margin-left: 5px;
+}
+
+/* 下一奖项按钮 */
+.next-prize-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.75rem 1rem;
+    background: rgba(0, 0, 0, 0.6);
+    border: 2px solid rgba(255, 215, 0, 0.5);
+    border-radius: 30px;
+    color: #FFD700;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.3s;
+    backdrop-filter: blur(5px);
+}
+
+.next-prize-btn:hover {
+    background: rgba(0, 0, 0, 0.8);
+    border-color: #FFD700;
+}
+
+.next-prize-btn .material-symbols-outlined {
+    font-size: 1.1rem;
 }
 
 /* Back Button */

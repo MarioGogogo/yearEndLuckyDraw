@@ -70,9 +70,8 @@ const winnerCount = computed(() => {
   const records = loadWinnerRecords()
   return records.length
 })
-const totalValue = computed(() => {
-  const total = prizes.value.reduce((sum, prize) => sum + (prize.amount * prize.count), 0)
-  return `¥${total.toLocaleString()}`
+const totalCount = computed(() => {
+  return prizes.value.reduce((sum, prize) => sum + (prize.count || 0), 0)
 })
 
 // 从缓存加载数据
@@ -210,7 +209,7 @@ onMounted(() => {
             subtitle="管理 2026 春节庆典活动的奖项层级、数量及库存详情。"
             @add="handleAddPrize"
           />
-          <StatsCards :prizeCount="prizeCount" :winnerCount="winnerCount" :totalValue="totalValue" />
+          <StatsCards :prizeCount="prizeCount" :winnerCount="winnerCount" :totalCount="totalCount" />
           <PrizeTable :prizes="prizes" @edit="handleEditPrize" @delete="handleDeletePrize" @update:prizes="prizes = $event" />
         </template>
 

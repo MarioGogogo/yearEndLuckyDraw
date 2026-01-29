@@ -226,6 +226,24 @@ const isCurrentPrizeAvailable = computed(() => {
   return !isPrizeCompleted(currentPrize.value)
 })
 
+// 单次抽取人数
+const batchCount = computed(() => currentPrize.value.batchCount || currentPrize.value.count || 1)
+
+// 奖项总人数
+const totalPrizeCount = computed(() => currentPrize.value.count || 0)
+
+// 已抽取人数
+const prizeDrawnCount = computed(() => winnerRecords.value.filter(r => r.prizeId === currentPrize.value.id).length)
+
+// 剩余可抽取人数
+const remainingCount = computed(() => Math.max(0, totalPrizeCount.value - prizeDrawnCount.value))
+
+// 预计还需抽取次数（向上取整）
+const remainingDraws = computed(() => {
+  if (remainingCount.value <= 0) return 0
+  return Math.ceil(remainingCount.value / batchCount.value)
+})
+
 // 根据屏幕宽度和中奖人数自动计算网格列数
 const winnerGridColumns = ref(8)
 
@@ -273,6 +291,8 @@ const loadData = () => {
 
   if (storedPrizes && storedPrizes.length > 0) {
     prizes.value = storedPrizes
+    // 默认选中最后一个奖项（从大奖到小奖倒序抽奖）
+    currentPrizeIndex.value = Math.max(0, prizes.value.length - 1)
   } else {
     // 默认奖项配置
     prizes.value = [
@@ -280,6 +300,7 @@ const loadData = () => {
       { id: 'second', name: '二等奖', color: '#C0C0C0', count: 3 },
       { id: 'third', name: '三等奖', color: '#DAA520', count: 5 }
     ]
+    currentPrizeIndex.value = 0
   }
 
   if (allParticipants.value === generateParticipants()) {
@@ -480,7 +501,8 @@ const finalizeDraw = () => {
   // 播放结束音效
   playSound('end')
 
-  const count = currentPrize.value.count || 1
+  // 使用 batchCount（单次抽取数量），默认为 1
+  const count = currentPrize.value.batchCount || currentPrize.value.count || 1
 
   // 选取中奖者
   const winners = []
@@ -672,6 +694,17 @@ const selectPrize = (index) => {
   resetDraw()
 }
 
+// 切换到下一奖项（更高一级）
+const goToNextPrize = () => {
+  if (currentPrizeIndex.value > 0) {
+    currentPrizeIndex.value--
+    resetDraw()
+  }
+}
+
+// 是否可以切换到下一奖项
+const canGoToNextPrize = computed(() => currentPrizeIndex.value > 0)
+
 // 返回后台
 const goBack = () => {
   emit('back')
@@ -811,6 +844,7 @@ onUnmounted(() => {
         >
           {{ drawStatus === STATE.RUNNING ? '停止抽奖' : '开始抽奖' }}
         </button>
+        <span class="keyboard-hint">按空格键也可以</span>
       </div>
     </footer>
 
@@ -820,6 +854,11 @@ onUnmounted(() => {
         {{ currentPrize.name || '选择奖项' }}
         <span class="arrow">{{ showPrizeSelector ? '▲' : '▼' }}</span>
       </button>
+      <!-- 奖项信息 -->
+      <div v-if="totalPrizeCount > 0" class="prize-info-text">
+        <span>名额: {{ totalPrizeCount }} (一次抽 {{ batchCount }} 人)</span>
+        <span v-if="remainingDraws > 0" class="remaining-draws">还需 {{ remainingDraws }} 次</span>
+      </div>
       <transition name="fade">
         <div v-if="showPrizeSelector" class="prize-options">
           <div
@@ -830,10 +869,19 @@ onUnmounted(() => {
             @click="selectPrize(i)"
           >
             {{ p.name }}
-            <span v-if="isPrizeCompleted(p)" class="badge">已完</span>
           </div>
         </div>
       </transition>
+      <!-- 下一奖项按钮 -->
+      <button
+        v-if="canGoToNextPrize"
+        class="next-prize-btn"
+        @click="goToNextPrize"
+        title="切换到高一级奖项"
+      >
+        <span class="material-symbols-outlined">arrow_upward</span>
+        下一奖项
+      </button>
     </div>
 
     <!-- 返回后台按钮 - 右下角 -->
@@ -1045,6 +1093,14 @@ font-family: 'Ma Shan Zheng', cursive;
   justify-content: center;
 }
 
+.keyboard-hint {
+  position: absolute;
+  right: 2rem;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.6);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
 .main-btn {
   padding: 1.5rem 4rem;
   font-size: 2rem;
@@ -1082,6 +1138,9 @@ font-family: 'Ma Shan Zheng', cursive;
   bottom: 2rem;
   left: 2rem;
   z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
 }
 
 .prize-selector-btn {
@@ -1104,6 +1163,24 @@ font-family: 'Ma Shan Zheng', cursive;
 .prize-selector-btn:hover {
   background: rgba(0, 0, 0, 0.8);
   box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
+}
+
+.prize-info-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 20px;
+  color: #FFD700;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.prize-info-text .remaining-draws {
+  color: rgba(255, 215, 0, 0.7);
+  font-size: 0.8rem;
 }
 
 .prize-options {
@@ -1145,6 +1222,33 @@ font-family: 'Ma Shan Zheng', cursive;
 
 .prize-option.active {
   background: rgba(255, 215, 0, 0.3);
+}
+
+/* 下一奖项按钮 */
+.next-prize-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(255, 215, 0, 0.5);
+  border-radius: 50px;
+  color: #FFD700;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  backdrop-filter: blur(10px);
+}
+
+.next-prize-btn:hover {
+  background: rgba(0, 0, 0, 0.8);
+  border-color: #FFD700;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+}
+
+.next-prize-btn .material-symbols-outlined {
+  font-size: 1.1rem;
 }
 
 .badge {

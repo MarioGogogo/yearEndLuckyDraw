@@ -11,6 +11,38 @@ const props = defineProps({
 const emit = defineEmits(['edit', 'delete', 'update:prizes'])
 
 const searchQuery = ref('')
+const draggedIndex = ref(null)
+
+// 拖拽排序相关
+function handleDragStart(event, index) {
+  draggedIndex.value = index
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', index)
+  event.target.classList.add('dragging')
+}
+
+function handleDragEnd(event) {
+  event.target.classList.remove('dragging')
+  draggedIndex.value = null
+}
+
+function handleDragOver(event, index) {
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'move'
+}
+
+function handleDrop(event, targetIndex) {
+  event.preventDefault()
+  if (draggedIndex.value === null || draggedIndex.value === targetIndex) return
+
+  const prizes = [...props.prizes]
+  const draggedItem = prizes[draggedIndex.value]
+  prizes.splice(draggedIndex.value, 1)
+  prizes.splice(targetIndex, 0, draggedItem)
+
+  emit('update:prizes', prizes)
+  draggedIndex.value = null
+}
 
 const filteredPrizes = computed(() => {
   if (!searchQuery.value) return props.prizes
@@ -93,7 +125,7 @@ function getStatusText(status) {
   <section class="table-section">
     <div class="table-container">
       <div class="table-header">
-        <h3>当前奖项列表</h3>
+        <h3>当前奖项列表(可拖拽排序)</h3>
         <div class="search-box">
           <span class="material-symbols-outlined search-icon">search</span>
           <input
@@ -109,19 +141,29 @@ function getStatusText(status) {
         <table class="prize-table">
           <thead>
             <tr>
+              <th class="th-drag"></th>
               <th class="th-info">奖项信息</th>
               <th class="th-center">发放数量</th>
-              <th class="th-center">奖品金额</th>
+              <th class="th-center">单次抽取</th>
               <th class="th-status">当前状态</th>
-              <th class="th-actions text-right">操作</th>
+              <th class="th-actions text-center">操作</th>
             </tr>
           </thead>
           <tbody>
             <tr
-              v-for="prize in paginatedPrizes"
+              v-for="(prize, index) in paginatedPrizes"
               :key="prize.id"
               class="prize-row"
+              :class="{ 'draggable-row': true }"
+              draggable="true"
+              @dragstart="handleDragStart($event, (currentPage - 1) * PAGE_SIZE + index)"
+              @dragend="handleDragEnd"
+              @dragover="handleDragOver($event, (currentPage - 1) * PAGE_SIZE + index)"
+              @drop="handleDrop($event, (currentPage - 1) * PAGE_SIZE + index)"
             >
+              <td class="td-drag">
+                <span class="material-symbols-outlined drag-handle">drag_indicator</span>
+              </td>
               <td class="td-info">
                 <div class="prize-info">
                   <div class="prize-image" :style="prize.image ? { backgroundImage: `url(${prize.image})` } : {}">
@@ -140,7 +182,7 @@ function getStatusText(status) {
                 <span class="quantity">{{ prize.count }}</span>
               </td>
               <td class="td-center">
-                <span class="amount">¥{{ prize.amount?.toLocaleString() }}</span>
+                <span class="batch-count">{{ prize.batchCount || 1 }} 人</span>
               </td>
               <td class="td-status">
                 <span :class="['status-badge', getStatusClass(prize.status)]">
@@ -149,11 +191,13 @@ function getStatusText(status) {
               </td>
               <td class="td-actions">
                 <div class="action-buttons">
-                  <button class="action-btn" @click="emit('edit', prize)" title="编辑">
+                  <button class="action-btn edit" @click="emit('edit', prize)">
                     <span class="material-symbols-outlined">edit</span>
+                    编辑
                   </button>
-                  <button class="action-btn delete" @click="emit('delete', prize.id)" title="删除">
+                  <button class="action-btn delete" @click="emit('delete', prize.id)">
                     <span class="material-symbols-outlined">delete</span>
+                    删除
                   </button>
                 </div>
               </td>
@@ -308,7 +352,7 @@ function getStatusText(status) {
 
 .prize-table th.th-actions,
 .prize-table td.td-actions {
-  text-align: right;
+  text-align: center;
 }
 
 .prize-row {
@@ -326,6 +370,44 @@ function getStatusText(status) {
 
 :global(.dark) .prize-row:hover {
   background: rgba(255, 255, 255, 0.05);
+}
+
+/* 拖拽相关样式 */
+.th-drag {
+  width: 40px !important;
+}
+
+.td-drag {
+  width: 40px !important;
+  padding: 1.25rem 0.5rem !important;
+}
+
+.drag-handle {
+  color: #9ca3af;
+  cursor: grab;
+  transition: color 0.2s;
+  font-size: 1.25rem;
+}
+
+.drag-handle:hover {
+  color: #f42525;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.draggable-row {
+  cursor: move;
+}
+
+.draggable-row.dragging {
+  opacity: 0.5;
+  background: rgba(244, 37, 37, 0.1);
+}
+
+:global(.dark) .draggable-row.dragging {
+  background: rgba(244, 37, 37, 0.2);
 }
 
 .prize-table td {
@@ -398,14 +480,14 @@ function getStatusText(status) {
   color: #9ca3af;
 }
 
-/* 数量 & 金额 */
-.quantity, .amount {
+/* 数量 & 单次抽取 */
+.quantity, .batch-count {
   font-size: 1.125rem;
   font-weight: 700;
   color: #181111;
 }
 
-.amount {
+.batch-count {
   color: #f42525;
 }
 
@@ -509,29 +591,34 @@ function getStatusText(status) {
 /* 操作按钮 */
 .action-buttons {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 0.5rem;
 }
 
 .action-btn {
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 50%;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
   border: 1px solid #e6dbdb;
   background: transparent;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 0.25rem;
   cursor: pointer;
   transition: all 0.2s;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
 }
 
 :global(.dark) .action-btn {
   border-color: #3d2a2a;
+  color: #9ca3af;
 }
 
 .action-btn:hover {
   background: #f8f5f5;
+  border-color: #f42525;
+  color: #f42525;
 }
 
 :global(.dark) .action-btn:hover {
@@ -539,16 +626,26 @@ function getStatusText(status) {
 }
 
 .action-btn :deep(.material-symbols-outlined) {
-  font-size: 1.125rem;
-  color: #6b7280;
+  font-size: 1rem;
+}
+
+.action-btn.delete {
+  color: #ef4444;
+  border-color: #fecaca;
 }
 
 .action-btn.delete:hover {
   background: #fef2f2;
+  border-color: #ef4444;
 }
 
-.action-btn.delete :deep(.material-symbols-outlined) {
-  color: #ef4444;
+:global(.dark) .action-btn.delete {
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+:global(.dark) .action-btn.delete:hover {
+  background: rgba(239, 68, 68, 0.1);
 }
 
 /* 空状态 */

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import * as XLSX from 'xlsx'
 
 const props = defineProps({
@@ -358,7 +358,20 @@ onMounted(() => {
   if (localParticipants.value.length === 0) {
     loadFromCache()
   }
+  // 监听 localStorage 变化（其他页面修改数据后同步）
+  window.addEventListener('storage', handleStorageChange)
 })
+
+onUnmounted(() => {
+  window.removeEventListener('storage', handleStorageChange)
+})
+
+// 处理其他页面修改 localStorage
+function handleStorageChange(e) {
+  if (e.key === STORAGE_KEY) {
+    loadFromCache()
+  }
+}
 </script>
 
 <template>

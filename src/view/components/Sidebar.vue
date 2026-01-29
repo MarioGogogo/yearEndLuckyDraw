@@ -23,8 +23,8 @@ const menuItems = [
         <span class="material-symbols-outlined">celebration</span>
       </div>
       <div>
-        <h1>年会抽奖系统</h1>
-        <p>2026 灵蛇献瑞</p>
+        <h1>西软年会抽奖系统</h1>
+        <p>2026 龙马精神</p>
       </div>
     </div>
 

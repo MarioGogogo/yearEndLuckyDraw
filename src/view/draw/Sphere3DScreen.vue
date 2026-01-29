@@ -42,33 +42,35 @@ const currentPrize = computed(() => prizes.value[currentPrizeIndex.value] || {
 
 // 中奖结果
 const winners = ref([])
-// 大奖环节中奖者人名列表（用于“人名+词语”格式弹幕）
+// 大奖环节中奖者人名列表（用于"人名+词语"格式弹幕）
 let grandPrizeWinnerNames = []
-// 只有在显示中奖结果时才显示真实数量，其他情况显示0
-const drawnCount = computed(() => {
-  if (drawStatus.value === 'result') {
-    return winners.value.length
-  }
-  return 0
-})
+// 已中奖累计人数
+const drawnCount = computed(() => prizeDrawnCount.value)
 const totalCount = computed(() => currentPrize.value.count || 0)
 
-// 单次抽取人数
-const batchCount = computed(() => currentPrize.value.batchCount || currentPrize.value.count || 1)
+// 单次抽取人数（批次大小）
+const batchSize = computed(() => currentPrize.value.batchCount || currentPrize.value.count || 1)
 
 // 奖项总人数
 const totalPrizeCount = computed(() => currentPrize.value.count || 0)
 
-// 已抽取人数
+// 已抽取人数（累计）
 const prizeDrawnCount = computed(() => winnerRecords.value.filter(r => r.prizeId === currentPrize.value.id).length)
 
 // 剩余可抽取人数
 const remainingCount = computed(() => Math.max(0, totalPrizeCount.value - prizeDrawnCount.value))
 
+// 当前轮次应抽取人数（考虑剩余人数，最后一批可能不足batchCount）
+const currentBatchCount = computed(() => {
+  const batch = batchSize.value
+  const remaining = remainingCount.value
+  return Math.min(batch, remaining)
+})
+
 // 预计还需抽取次数（向上取整）
 const remainingDraws = computed(() => {
   if (remainingCount.value <= 0) return 0
-  return Math.ceil(remainingCount.value / batchCount.value)
+  return Math.ceil(remainingCount.value / batchSize.value)
 })
 
 // 弹幕
@@ -845,12 +847,6 @@ let drawTimer = null
 function startDraw() {
   if (drawStatus.value !== 'idle' && drawStatus.value !== 'ready') return
 
-  // 检查奖项是否已抽取完毕
-  if (!isCurrentPrizeAvailable.value) {
-    alert('该奖项已抽取完毕，请选择其他奖项！')
-    return
-  }
-
   if (eligibleParticipants.value.length === 0) {
     alert('没有可抽奖的参与人员！')
     return
@@ -873,11 +869,8 @@ function startDraw() {
   const centerY = canvas.height / 2
 
   // 预先使用算法抽取中奖者
-  // 使用 batchCount（单次抽取数量），默认为 count
-  const winnerCount = Math.min(
-    currentPrize.value.batchCount || currentPrize.value.count || 1,
-    eligibleParticipants.value.length
-  )
+  // 使用 currentBatchCount（考虑剩余人数）
+  const winnerCount = currentBatchCount.value
 
   const selectedWinners = draw(eligibleParticipants.value, winnerCount, settings.value)
   winners.value = selectedWinners
@@ -1022,8 +1015,9 @@ function stopAllSounds() {
 
 // ========== 布局和样式计算 ==========
 const winnersLayoutType = computed(() => {
-  const count = winners.value.length
-  if (count <= 10) return 'showcase'
+  const total = totalPrizeCount.value
+  // 奖项总人数 <= 10 人用大卡片模式，其他用网格模式
+  if (total <= 10) return 'showcase'
   return 'grid'
 })
 
@@ -1151,7 +1145,7 @@ onUnmounted(() => {
             <div class="gift-icon">🎁</div>
           </div>
           <div class="draw-info">
-            <div class="draw-text">一次抽取 {{ batchCount }} 人</div>
+            <div class="draw-text">一次抽取 {{ currentBatchCount }} 人</div>
             <div v-if="remainingDraws > 0" class="draw-subtext">还需 {{ remainingDraws }} 次抽完</div>
             <div class="algorithm-hint">{{ getAlgorithmInfo(settings) }}</div>
           </div>
@@ -1234,10 +1228,10 @@ onUnmounted(() => {
         <button
           v-if="drawStatus === 'idle' || drawStatus === 'ready'"
           class="main-btn draw-btn"
-          :disabled="isDrawButtonDisabled"
+          :disabled="isDrawButtonDisabled || remainingCount <= 0 || currentBatchCount <= 0"
           @click="startDraw"
         >
-          {{ !isCurrentPrizeAvailable ? '奖项已抽完' : '开始抽奖' }}
+          {{ remainingCount <= 0 || currentBatchCount <= 0 ? '该奖项已抽完' : '开始抽奖' }}
         </button>
         <button
           v-else-if="drawStatus === 'drawing' || drawStatus === 'stopping'"
@@ -1259,6 +1253,7 @@ onUnmounted(() => {
     <!-- 奖项选择器 -->
     <div class="prize-selector" :class="{ active: showPrizeSelector }">
       <button
+        v-if="false"
         class="prize-selector-btn"
         @click="togglePrizeSelector"
         :disabled="drawStatus !== 'idle' && drawStatus !== 'ready'"
@@ -1639,7 +1634,7 @@ onUnmounted(() => {
   justify-content: center;
   gap: 2rem;
   max-width: 90%;
-  margin-top: 2rem;
+  margin-top: 10rem;
 }
 
 .showcase-card {
@@ -1744,7 +1739,7 @@ onUnmounted(() => {
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 0.75rem;
   max-width: 90%;
-  margin-top: 1rem;
+  margin-top: 15rem;
 }
 
 .compact-card {
