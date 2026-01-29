@@ -22,6 +22,7 @@ const emit = defineEmits(['back'])
 const drawStatus = ref('idle') // idle, ready, drawing, stopping, result
 const showConfigAlert = ref(false)
 const configAlertMessage = ref('')
+const isAutoStopped = ref(false) // 标记是否是自动停止
 
 // 加载的数据
 const allParticipants = ref([])
@@ -51,6 +52,24 @@ const drawnCount = computed(() => {
   return 0
 })
 const totalCount = computed(() => currentPrize.value.count || 0)
+
+// 单次抽取人数
+const batchCount = computed(() => currentPrize.value.batchCount || currentPrize.value.count || 1)
+
+// 奖项总人数
+const totalPrizeCount = computed(() => currentPrize.value.count || 0)
+
+// 已抽取人数
+const prizeDrawnCount = computed(() => winnerRecords.value.filter(r => r.prizeId === currentPrize.value.id).length)
+
+// 剩余可抽取人数
+const remainingCount = computed(() => Math.max(0, totalPrizeCount.value - prizeDrawnCount.value))
+
+// 预计还需抽取次数（向上取整）
+const remainingDraws = computed(() => {
+  if (remainingCount.value <= 0) return 0
+  return Math.ceil(remainingCount.value / batchCount.value)
+})
 
 // 弹幕
 const danmakuList = ref([])
@@ -101,6 +120,8 @@ function loadSystemData() {
 
   // 加载奖项配置
   prizes.value = loadPrizes()
+  // 默认选中最后一个奖项（从大奖到小奖倒序抽奖）
+  currentPrizeIndex.value = Math.max(0, prizes.value.length - 1)
 
   // 加载中奖记录
   winnerRecords.value = loadWinnerRecords()
@@ -154,6 +175,17 @@ function selectPrize(index) {
   resetScene()
 }
 
+// 切换到下一奖项（更高一级）
+function goToNextPrize() {
+  if (currentPrizeIndex.value > 0) {
+    currentPrizeIndex.value--
+    resetScene()
+  }
+}
+
+// 是否可以切换到下一奖项
+const canGoToNextPrize = computed(() => currentPrizeIndex.value > 0)
+
 // 获取奖项剩余可抽取数量
 function getPrizeDrawCount(prizeId) {
   return winnerRecords.value.filter(r => r.prizeId === prizeId).length
@@ -182,6 +214,7 @@ function handleKeydown(e) {
       }
     } else if (drawStatus.value === 'drawing') {
       // 空格键停止抽奖
+      isAutoStopped.value = false
       stopDraw()
     }
   }
@@ -834,13 +867,15 @@ function startDraw() {
   }
 
   drawStatus.value = 'drawing'
+  isAutoStopped.value = false
 
   const centerX = canvas.width / 2
   const centerY = canvas.height / 2
 
   // 预先使用算法抽取中奖者
+  // 使用 batchCount（单次抽取数量），默认为 count
   const winnerCount = Math.min(
-    currentPrize.value.count || 1,
+    currentPrize.value.batchCount || currentPrize.value.count || 1,
     eligibleParticipants.value.length
   )
 
@@ -878,6 +913,7 @@ function startDraw() {
   const autoStopTime = durationMap[settings.value?.animationSpeed || 'normal'] || 3000
 
   drawTimer = setTimeout(() => {
+    isAutoStopped.value = true
     stopDraw()
   }, autoStopTime + 2000)
 }
@@ -951,6 +987,8 @@ function resetScene() {
   speedLines = []
   // 清空大奖中奖者人名列表
   grandPrizeWinnerNames = []
+  // 重置自动停止标记
+  isAutoStopped.value = false
 
   drawStatus.value = 'idle'
 }
@@ -1113,7 +1151,8 @@ onUnmounted(() => {
             <div class="gift-icon">🎁</div>
           </div>
           <div class="draw-info">
-            <div class="draw-text">一次抽取 {{ currentPrize.count }} 人</div>
+            <div class="draw-text">一次抽取 {{ batchCount }} 人</div>
+            <div v-if="remainingDraws > 0" class="draw-subtext">还需 {{ remainingDraws }} 次抽完</div>
             <div class="algorithm-hint">{{ getAlgorithmInfo(settings) }}</div>
           </div>
         </div>
@@ -1212,7 +1251,7 @@ onUnmounted(() => {
           class="main-btn confirm-btn"
           @click="resetScene"
         >
-          继续下一轮
+          {{ isAutoStopped ? '确认结果，继续下一轮' : '继续下一轮' }}
         </button>
       </div>
     </footer>
@@ -1264,6 +1303,17 @@ onUnmounted(() => {
           </button>
         </div>
       </transition>
+
+      <!-- 下一奖项按钮 -->
+      <button
+        v-if="canGoToNextPrize"
+        class="next-prize-btn"
+        @click="goToNextPrize"
+        title="切换到高一级奖项"
+      >
+        <span class="material-symbols-outlined">arrow_upward</span>
+        下一奖项
+      </button>
     </div>
 
     <!-- 无奖项配置提示 -->
@@ -1551,6 +1601,12 @@ onUnmounted(() => {
   margin-top: 0.5rem;
 }
 
+.draw-subtext {
+  font-size: 0.85rem;
+  color: rgba(255, 215, 0, 0.7);
+  margin-top: 0.25rem;
+}
+
 /* 结果容器 */
 .result-container {
   position: absolute;
@@ -1763,6 +1819,8 @@ onUnmounted(() => {
   justify-content: center;
 }
 
+
+
 .main-btn {
   padding: 1.5rem 4rem;
   font-size: 2rem;
@@ -1815,6 +1873,9 @@ onUnmounted(() => {
   bottom: 2rem;
   left: 2rem;
   z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
 }
 
 .prize-selector-btn {
@@ -1918,6 +1979,33 @@ onUnmounted(() => {
 .prize-option.completed .completed-text {
   color: #888;
   font-size: 0.8rem;
+}
+
+/* 下一奖项按钮 */
+.next-prize-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(255, 215, 0, 0.5);
+  border-radius: 50px;
+  color: #FFD700;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  backdrop-filter: blur(10px);
+}
+
+.next-prize-btn:hover {
+  background: rgba(0, 0, 0, 0.8);
+  border-color: #FFD700;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+}
+
+.next-prize-btn .material-symbols-outlined {
+  font-size: 1.1rem;
 }
 
 .prize-options-enter-active,
