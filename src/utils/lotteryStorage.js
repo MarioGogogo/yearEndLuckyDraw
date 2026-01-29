@@ -157,8 +157,10 @@ export function saveWinnerRecords(records) {
  */
 export function addWinnerRecord(winner, prize) {
   const records = loadWinnerRecords()
+  // 使用时间戳 + 随机数确保 ID 唯一性，避免批量抽奖时同一毫秒产生相同 ID
+  const uniqueId = `${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
   const newRecord = {
-    id: Date.now(),
+    id: uniqueId,
     winnerId: winner.id,
     winnerName: winner.name,
     winnerDept: winner.department,

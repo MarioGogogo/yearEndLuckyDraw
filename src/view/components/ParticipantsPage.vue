@@ -154,6 +154,62 @@ const winnerPercent = computed(() => {
   return ((winnerCount.value / totalCount.value) * 100).toFixed(1)
 })
 
+// ========== 重复检测功能 ==========
+const showDuplicateModal = ref(false)
+const duplicateCheckResult = ref([])
+const duplicateCheckType = ref('name') // 'name' 或 'nameAndDept'
+
+// 检测重复员工
+function checkDuplicates() {
+  const participants = localParticipants.value
+  const duplicates = []
+
+  // 按姓名分组
+  const nameGroups = {}
+  participants.forEach(p => {
+    const key = p.name.trim()
+    if (!nameGroups[key]) {
+      nameGroups[key] = []
+    }
+    nameGroups[key].push(p)
+  })
+
+  // 找出重复的姓名
+  Object.keys(nameGroups).forEach(name => {
+    if (nameGroups[name].length > 1) {
+      duplicates.push({
+        name,
+        count: nameGroups[name].length,
+        items: nameGroups[name].map(p => ({
+          id: p.id,
+          name: p.name,
+          department: p.department || '未知部门',
+          status: p.status
+        }))
+      })
+    }
+  })
+
+  duplicateCheckResult.value = duplicates
+  showDuplicateModal.value = true
+}
+
+// 关闭重复检测弹窗
+function closeDuplicateModal() {
+  showDuplicateModal.value = false
+  duplicateCheckResult.value = []
+}
+
+// 移除重复员工（保留第一个）
+function removeDuplicateItem(id) {
+  if (confirm('确定要移除这条重复记录吗？')) {
+    localParticipants.value = localParticipants.value.filter(p => p.id !== id)
+    saveToCache()
+    // 重新检测
+    checkDuplicates()
+  }
+}
+
 // 生成状态徽章颜色
 function getStatusClass(status) {
   return status === 'won' ? 'status-won' : 'status-pending'
@@ -289,12 +345,20 @@ function downloadTemplate() {
 // 重置员工状态
 function resetParticipant(id) {
   const participant = localParticipants.value.find(p => p.id === id)
-  if (participant && participant.status === 'won') {
+  if (!participant) return
+
+  // 如果已经是待抽奖状态，不需要重置
+  if (participant.status === 'pending') {
+    return
+  }
+
+  if (participant.status === 'won') {
     if (confirm('确定要将该员工重置为待抽奖状态吗？')) {
       participant.status = 'pending'
       saveToCache()
     }
   } else {
+    // 其他状态也重置为 pending
     participant.status = 'pending'
     saveToCache()
   }
@@ -336,18 +400,18 @@ function submitAddParticipant() {
     alert('请输入姓名')
     return
   }
-  
+
   const person = {
     id: Date.now(),
     name: newParticipant.value.name.trim(),
     department: newParticipant.value.department.trim() || '未分类',
     gender: newParticipant.value.gender,
-    email: newParticipant.value.contact.trim(), 
+    email: newParticipant.value.contact.trim(),
     phone: '',
     status: 'pending',
     createdAt: new Date().toISOString()
   }
-  
+
   localParticipants.value = [person, ...localParticipants.value]
   saveToCache()
   closeAddModal()
@@ -380,12 +444,16 @@ function handleStorageChange(e) {
     <div class="page-header">
       <div class="header-content">
         <h2>参与人员管理</h2>
-        <p>管理乙巳蛇年年度抽奖活动的员工信息库。</p>
+        <p>管理金马年年度抽奖活动的员工信息库。</p>
       </div>
       <div class="header-actions">
         <button class="action-btn-outline" @click="addParticipant">
           <span class="material-symbols-outlined">person_add</span>
           <span class="truncate">新增人员</span>
+        </button>
+        <button class="action-btn-outline check" @click="checkDuplicates">
+          <span class="material-symbols-outlined">find_replace</span>
+          <span class="truncate">检测重复</span>
         </button>
         <button class="action-btn-outline clear" @click="clearAll">
           <span class="material-symbols-outlined">delete_sweep</span>
@@ -396,21 +464,9 @@ function handleStorageChange(e) {
 
     <!-- 上传区域 -->
     <div class="upload-section">
-      <div
-        class="upload-zone"
-        :class="{ dragging: isDragging }"
-        @dragenter="handleDragEnter"
-        @dragover.prevent
-        @dragleave="handleDragLeave"
-        @drop="handleDrop"
-      >
-        <input
-          ref="fileInput"
-          type="file"
-          accept=".xlsx,.xls,.csv"
-          class="file-input"
-          @change="handleFileUpload"
-        />
+      <div class="upload-zone" :class="{ dragging: isDragging }" @dragenter="handleDragEnter" @dragover.prevent
+        @dragleave="handleDragLeave" @drop="handleDrop">
+        <input ref="fileInput" type="file" accept=".xlsx,.xls,.csv" class="file-input" @change="handleFileUpload" />
         <div class="upload-icon-wrap">
           <div class="upload-icon-bg">
             <span class="material-symbols-outlined">upload_file</span>
@@ -492,11 +548,7 @@ function handleStorageChange(e) {
             </tr>
           </thead>
           <tbody>
-            <tr
-              v-for="person in currentPageData"
-              :key="person.id"
-              class="data-row"
-            >
+            <tr v-for="person in currentPageData" :key="person.id" class="data-row">
               <td class="td-name">
                 <div class="name-cell">
                   <div class="avatar" :class="getColorClass(person.name)">
@@ -514,20 +566,13 @@ function handleStorageChange(e) {
               </td>
               <td class="td-actions">
                 <div class="action-buttons">
-                  <button
-                    class="action-icon-btn"
-                    :title="person.status === 'won' ? '重置中奖状态' : '重置参与状态'"
-                    @click="resetParticipant(person.id)"
-                  >
+                  <button class="action-icon-btn" :title="person.status === 'won' ? '重置中奖状态' : '重置参与状态'"
+                    @click="resetParticipant(person.id)">
                     <span class="material-symbols-outlined">
                       {{ person.status === 'won' ? 'restart_alt' : 'history' }}
                     </span>
                   </button>
-                  <button
-                    class="action-icon-btn delete"
-                    title="移除员工"
-                    @click="removeParticipant(person.id)"
-                  >
+                  <button class="action-icon-btn delete" title="移除员工" @click="removeParticipant(person.id)">
                     <span class="material-symbols-outlined">person_remove</span>
                   </button>
                 </div>
@@ -548,45 +593,24 @@ function handleStorageChange(e) {
           显示第 {{ pageStart }} 至 {{ pageEnd }} 名员工，共 {{ totalCount.toLocaleString() }} 人
         </p>
         <div class="pagination" v-if="totalPages > 1">
-          <button
-            class="page-btn"
-            :disabled="currentPage === 1"
-            @click="prevPage"
-          >
+          <button class="page-btn" :disabled="currentPage === 1" @click="prevPage">
             &lt;
           </button>
           <div class="page-numbers">
-            <button
-              class="page-number"
-              :class="{ active: currentPage === 1 }"
-              @click="goToPage(1)"
-            >
+            <button class="page-number" :class="{ active: currentPage === 1 }" @click="goToPage(1)">
               1
             </button>
             <span v-if="currentPage > 3" class="page-ellipsis">...</span>
-            <button
-              v-for="page in getMiddlePages()"
-              :key="page"
-              class="page-number"
-              :class="{ active: currentPage === page }"
-              @click="goToPage(page)"
-            >
+            <button v-for="page in getMiddlePages()" :key="page" class="page-number"
+              :class="{ active: currentPage === page }" @click="goToPage(page)">
               {{ page }}
             </button>
             <span v-if="currentPage < totalPages - 2" class="page-ellipsis">...</span>
-            <button
-              class="page-number"
-              :class="{ active: currentPage === totalPages }"
-              @click="goToPage(totalPages)"
-            >
+            <button class="page-number" :class="{ active: currentPage === totalPages }" @click="goToPage(totalPages)">
               {{ totalPages }}
             </button>
           </div>
-          <button
-            class="page-btn"
-            :disabled="currentPage === totalPages"
-            @click="nextPage"
-          >
+          <button class="page-btn" :disabled="currentPage === totalPages" @click="nextPage">
             &gt;
           </button>
         </div>
@@ -646,6 +670,58 @@ function handleStorageChange(e) {
           <div class="modal-footer">
             <button class="modal-cancel-btn" @click="closeAddModal">取消</button>
             <button class="modal-submit-btn" @click="submitAddParticipant">确定添加</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- 重复检测结果弹窗 -->
+    <Transition name="modal">
+      <div v-if="showDuplicateModal" class="modal-overlay" @click.self="closeDuplicateModal">
+        <div class="modal-content duplicate-modal">
+          <div class="modal-header">
+            <h3>重复员工检测结果</h3>
+            <button class="close-btn" @click="closeDuplicateModal">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div v-if="duplicateCheckResult.length === 0" class="no-duplicate">
+              <span class="material-symbols-outlined success-icon">check_circle</span>
+              <p>恭喜！未发现重复员工</p>
+              <p class="hint">所有员工姓名都是唯一的</p>
+            </div>
+            <div v-else class="duplicate-list">
+              <div class="duplicate-summary">
+                <span class="material-symbols-outlined warning-icon">warning</span>
+                <p>发现 <strong>{{ duplicateCheckResult.length }}</strong> 组重复姓名</p>
+              </div>
+              <div class="duplicate-groups">
+                <div v-for="group in duplicateCheckResult" :key="group.name" class="duplicate-group">
+                  <div class="group-header">
+                    <span class="group-name">{{ group.name }}</span>
+                    <span class="group-count">{{ group.count }} 人</span>
+                  </div>
+                  <div class="group-items">
+                    <div v-for="(item, index) in group.items" :key="item.id" class="group-item">
+                      <div class="item-info">
+                        <span class="item-dept">{{ item.department }}</span>
+                        <span :class="['item-status', item.status === 'won' ? 'won' : '']">
+                          {{ item.status === 'won' ? '已中奖' : '待抽奖' }}
+                        </span>
+                      </div>
+                      <button v-if="index > 0" class="remove-btn" @click="removeDuplicateItem(item.id)" title="移除此记录">
+                        <span class="material-symbols-outlined">delete</span>
+                      </button>
+                      <span v-else class="keep-mark">保留</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="modal-submit-btn" @click="closeDuplicateModal">关闭</button>
           </div>
         </div>
       </div>
@@ -861,6 +937,7 @@ function handleStorageChange(e) {
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -1552,5 +1629,210 @@ function handleStorageChange(e) {
 
 :global(.dark) .info-content p {
   color: #d1d5db;
+}
+
+/* 检测按钮样式 */
+.action-btn-outline.check {
+  color: #2563eb;
+  border-color: #2563eb;
+}
+
+.action-btn-outline.check:hover {
+  background: rgba(37, 99, 235, 0.1);
+}
+
+/* 重复检测弹窗样式 */
+.duplicate-modal {
+  max-width: 600px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.duplicate-modal .modal-body {
+  overflow-y: auto;
+  max-height: 60vh;
+}
+
+.no-duplicate {
+  text-align: center;
+  padding: 2rem;
+}
+
+.no-duplicate .success-icon {
+  font-size: 4rem;
+  color: #10b981;
+  margin-bottom: 1rem;
+}
+
+.no-duplicate p {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #181111;
+  margin-bottom: 0.5rem;
+}
+
+:global(.dark) .no-duplicate p {
+  color: white;
+}
+
+.no-duplicate .hint {
+  font-size: 0.875rem;
+  color: #8a6060;
+  font-weight: 400;
+}
+
+.duplicate-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: rgba(245, 158, 11, 0.1);
+  border-radius: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.duplicate-summary .warning-icon {
+  font-size: 1.5rem;
+  color: #f59e0b;
+}
+
+.duplicate-summary p {
+  color: #181111;
+  font-size: 0.9375rem;
+}
+
+:global(.dark) .duplicate-summary p {
+  color: white;
+}
+
+.duplicate-summary strong {
+  color: #f59e0b;
+}
+
+.duplicate-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.duplicate-group {
+  border: 1px solid #e6dbdb;
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+:global(.dark) .duplicate-group {
+  border-color: #3d2a2a;
+}
+
+.group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: #f8f5f5;
+}
+
+:global(.dark) .group-header {
+  background: #2d1f1f;
+}
+
+.group-name {
+  font-weight: 700;
+  color: #181111;
+  font-size: 0.9375rem;
+}
+
+:global(.dark) .group-name {
+  color: white;
+}
+
+.group-count {
+  font-size: 0.75rem;
+  color: #f42525;
+  background: rgba(244, 37, 37, 0.1);
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  font-weight: 600;
+}
+
+.group-items {
+  padding: 0.5rem;
+}
+
+.group-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+}
+
+.group-item:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+:global(.dark) .group-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.item-info {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.item-dept {
+  font-size: 0.875rem;
+  color: #8a6060;
+}
+
+:global(.dark) .item-dept {
+  color: #9ca3af;
+}
+
+.item-status {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.item-status.won {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+
+.remove-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  background: rgba(244, 37, 37, 0.1);
+  border: none;
+  border-radius: 0.375rem;
+  color: #f42525;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.remove-btn:hover {
+  background: #f42525;
+  color: white;
+}
+
+.remove-btn .material-symbols-outlined {
+  font-size: 1rem;
+}
+
+.keep-mark {
+  font-size: 0.75rem;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  font-weight: 600;
 }
 </style>

@@ -41,6 +41,7 @@ const emit = defineEmits(['add'])
   align-items: flex-start;
   gap: 1rem;
   flex-wrap: wrap;
+  margin-bottom: 2rem;
 }
 
 .header-content h2 {

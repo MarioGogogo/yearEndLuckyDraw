@@ -332,7 +332,7 @@ class NameParticle {
     const fontSize = this.baseFontSize * sizeScale
 
     if (screenX < -800 || screenX > canvas.width + 800 ||
-        screenY < -800 || screenY > canvas.height + 800) {
+      screenY < -800 || screenY > canvas.height + 800) {
       return
     }
 
@@ -344,7 +344,7 @@ class NameParticle {
     const textWidth = ctx.measureText(this.name).width
     const padding = 8 + sizeScale * 4
 
-    const gradient = ctx.createLinearGradient(-textWidth/2 - padding, 0, textWidth/2 + padding, 0)
+    const gradient = ctx.createLinearGradient(-textWidth / 2 - padding, 0, textWidth / 2 + padding, 0)
     gradient.addColorStop(0, this.isWinner ? 'rgba(255, 215, 0, 0.95)' : 'rgba(255, 215, 0, 0.85)')
     gradient.addColorStop(1, this.isWinner ? 'rgba(255, 165, 0, 0.95)' : 'rgba(255, 140, 0, 0.85)')
 
@@ -353,7 +353,7 @@ class NameParticle {
     ctx.shadowBlur = 10 + sizeScale * 5
 
     const rectHeight = fontSize + padding
-    this.roundRect(ctx, -textWidth/2 - padding, -fontSize/2 - padding/2, textWidth + padding*2, rectHeight, 8)
+    this.roundRect(ctx, -textWidth / 2 - padding, -fontSize / 2 - padding / 2, textWidth + padding * 2, rectHeight, 8)
     ctx.fill()
 
     ctx.shadowBlur = 0
@@ -425,7 +425,7 @@ class SpeedLine {
     const screenY = this.centerY + this.dirY * scale
 
     if (screenX < -100 || screenX > canvas.width + 100 ||
-        screenY < -100 || screenY > canvas.height + 100) {
+      screenY < -100 || screenY > canvas.height + 100) {
       return
     }
 
@@ -785,7 +785,13 @@ function initDanmaku() {
       const layerOffset = (Math.random() - 0.5) * 4 // 每层内微调 ±2%
       top = 5 + layer * 9 + layerOffset // 从5%开始，每层间隔9%
     } else {
-      top = Math.random() * 90
+      // 互动设置中是否开启全屏弹幕
+      const isFullScreenBarrage = settings.value?.fullScreenBarrageEnabled !== false
+      if (isFullScreenBarrage) {
+        top = 5 + Math.random() * 85 // 在 5% - 90% 范围内随机分布
+      } else {
+        top = Math.random() * 20 // 限制在顶部 20% 范围内
+      }
     }
 
     // 优化延迟时间：大奖弹幕延迟范围更长，分批出现
@@ -1157,17 +1163,12 @@ onUnmounted(() => {
         <div v-if="drawStatus === 'result'" class="result-container" :class="winnersLayoutType">
           <template v-if="winnersLayoutType === 'showcase'">
             <div class="showcase-winners">
-              <div
-                v-for="(winner, index) in winners"
-                :key="index"
-                class="showcase-card"
-                :class="{ 'is-grand-prize': currentPrize.name === '特等奖' }"
-                :style="{
+              <div v-for="(winner, index) in winners" :key="index" class="showcase-card"
+                :class="{ 'is-grand-prize': currentPrize.name === '特等奖' }" :style="{
                   background: prizeLevelStyle.gradient,
                   '--glow-color': prizeLevelStyle.glow,
                   animationDelay: `${index * 0.15}s`
-                }"
-              >
+                }">
                 <!-- 头像显示 -->
                 <div v-if="showAvatar && winner.avatar" class="winner-avatar">
                   <img :src="winner.avatar" :alt="winner.name" />
@@ -1187,12 +1188,8 @@ onUnmounted(() => {
 
           <template v-else>
             <div class="compact-grid">
-              <div
-                v-for="(winner, index) in winners"
-                :key="index"
-                class="compact-card"
-                :style="{ animationDelay: `${index * 0.02}s` }"
-              >
+              <div v-for="(winner, index) in winners" :key="index" class="compact-card"
+                :style="{ animationDelay: `${index * 0.02}s` }">
                 <div v-if="showAvatar" class="compact-avatar">
                   {{ winner.name.charAt(0) }}
                 </div>
@@ -1211,13 +1208,9 @@ onUnmounted(() => {
     <canvas id="firework-canvas" class="firework-canvas"></canvas>
 
     <!-- 弹幕层 -->
-    <div v-if="drawStatus === 'result' && settings?.barrageEnabled" class="danmaku-container">
-      <div
-        v-for="item in danmakuList"
-        :key="item.id"
-        class="danmaku-item"
-        :style="item.style"
-      >
+    <div v-if="drawStatus === 'result' && settings?.barrageEnabled" class="danmaku-container"
+      :class="{ 'full-screen': settings?.fullScreenBarrageEnabled !== false }">
+      <div v-for="item in danmakuList" :key="item.id" class="danmaku-item" :style="item.style">
         {{ item.text }}
       </div>
     </div>
@@ -1225,39 +1218,23 @@ onUnmounted(() => {
     <!-- 底部控制按钮 -->
     <footer class="screen-footer">
       <div class="control-area">
-        <button
-          v-if="drawStatus === 'idle' || drawStatus === 'ready'"
-          class="main-btn draw-btn"
-          :disabled="isDrawButtonDisabled || remainingCount <= 0 || currentBatchCount <= 0"
-          @click="startDraw"
-        >
-          {{ remainingCount <= 0 || currentBatchCount <= 0 ? '该奖项已抽完' : '开始抽奖' }}
-        </button>
-        <button
-          v-else-if="drawStatus === 'drawing' || drawStatus === 'stopping'"
-          class="main-btn stop-btn"
-          @click="stopDraw"
-        >
-          {{ drawStatus === 'stopping' ? '正在停止...' : '停止抽奖' }}
-        </button>
-        <button
-          v-else-if="drawStatus === 'result'"
-          class="main-btn confirm-btn"
-          @click="resetScene"
-        >
-          {{ isAutoStopped ? '确认结果，继续下一轮' : '继续下一轮' }}
-        </button>
+        <button v-if="drawStatus === 'idle' || drawStatus === 'ready'" class="main-btn draw-btn"
+          :disabled="isDrawButtonDisabled || remainingCount <= 0 || currentBatchCount <= 0" @click="startDraw">
+          {{ remainingCount <= 0 || currentBatchCount <= 0 ? '该奖项已抽完' : '开始抽奖' }} </button>
+            <button v-else-if="drawStatus === 'drawing' || drawStatus === 'stopping'" class="main-btn stop-btn"
+              @click="stopDraw">
+              {{ drawStatus === 'stopping' ? '正在停止...' : '停止抽奖' }}
+            </button>
+            <button v-else-if="drawStatus === 'result'" class="main-btn confirm-btn" @click="resetScene">
+              {{ isAutoStopped ? '确认结果，继续下一轮' : '继续下一轮' }}
+            </button>
       </div>
     </footer>
 
     <!-- 奖项选择器 -->
     <div class="prize-selector" :class="{ active: showPrizeSelector }">
-      <button
-        v-if="false"
-        class="prize-selector-btn"
-        @click="togglePrizeSelector"
-        :disabled="drawStatus !== 'idle' && drawStatus !== 'ready'"
-      >
+      <button v-if="false" class="prize-selector-btn" @click="togglePrizeSelector"
+        :disabled="drawStatus !== 'idle' && drawStatus !== 'ready'">
         <span class="prize-selector-label">
           {{ currentPrize.name }}
           <span v-if="!isCurrentPrizeAvailable" class="prize-completed-badge">已抽完</span>
@@ -1269,11 +1246,8 @@ onUnmounted(() => {
         <div v-if="showPrizeSelector" class="prize-options">
           <!-- 已完成的奖项（灰色禁用，分开显示） -->
           <template v-for="(prize, index) in prizes" :key="prize.id || index">
-            <div
-              v-if="isPrizeCompleted(prize)"
-              class="prize-option completed"
-              :class="{ selected: index === currentPrizeIndex }"
-            >
+            <div v-if="isPrizeCompleted(prize)" class="prize-option completed"
+              :class="{ selected: index === currentPrizeIndex }">
               <div class="prize-option-name">{{ prize.name }}</div>
               <div class="prize-option-info">
                 <span class="completed-text">已抽取完毕</span>
@@ -1282,15 +1256,9 @@ onUnmounted(() => {
           </template>
 
           <!-- 可抽取的奖项（正常显示） -->
-          <button
-            v-for="(prize, index) in prizes"
-            :key="prize.id || index"
-            class="prize-option"
-            :class="{ selected: index === currentPrizeIndex }"
-            :disabled="isPrizeCompleted(prize)"
-            @click="selectPrize(index)"
-            v-show="!isPrizeCompleted(prize)"
-          >
+          <button v-for="(prize, index) in prizes" :key="prize.id || index" class="prize-option"
+            :class="{ selected: index === currentPrizeIndex }" :disabled="isPrizeCompleted(prize)"
+            @click="selectPrize(index)" v-show="!isPrizeCompleted(prize)">
             <div class="prize-option-name">{{ prize.name }}</div>
             <div class="prize-option-info">
               <span>{{ prize.count - getPrizeDrawCount(prize.id) }} 人剩余</span>
@@ -1300,12 +1268,7 @@ onUnmounted(() => {
       </transition>
 
       <!-- 下一奖项按钮 -->
-      <button
-        v-if="canGoToNextPrize"
-        class="next-prize-btn"
-        @click="goToNextPrize"
-        title="切换到高一级奖项"
-      >
+      <button v-if="canGoToNextPrize" class="next-prize-btn" @click="goToNextPrize" title="切换到高一级奖项">
         <span class="material-symbols-outlined">arrow_upward</span>
         下一奖项
       </button>
@@ -1421,19 +1384,24 @@ onUnmounted(() => {
 .radial-gradient {
   position: absolute;
   inset: 0;
-  background: radial-gradient(
-    circle at center,
-    #FF4444 0%,
-    #DC143C 30%,
-    #8B0000 60%,
-    #1a0000 100%
-  );
+  background: radial-gradient(circle at center,
+      #FF4444 0%,
+      #DC143C 30%,
+      #8B0000 60%,
+      #1a0000 100%);
   animation: pulse-gradient 3s ease-in-out infinite;
 }
 
 @keyframes pulse-gradient {
-  0%, 100% { opacity: 0.8; }
-  50% { opacity: 1; }
+
+  0%,
+  100% {
+    opacity: 0.8;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 /* Canvas */
@@ -1551,8 +1519,15 @@ onUnmounted(() => {
 }
 
 @keyframes gift-float {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-20px) scale(1.05); }
+
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+
+  50% {
+    transform: translateY(-20px) scale(1.05);
+  }
 }
 
 .gift-glow {
@@ -1564,8 +1539,17 @@ onUnmounted(() => {
 }
 
 @keyframes glow-pulse {
-  0%, 100% { transform: scale(1); opacity: 0.6; }
-  50% { transform: scale(1.3); opacity: 1; }
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+
+  50% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
 }
 
 .gift-icon {
@@ -1575,8 +1559,13 @@ onUnmounted(() => {
 }
 
 @keyframes gift-rotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .draw-info {
@@ -1648,7 +1637,7 @@ onUnmounted(() => {
   border: 3px solid rgba(255, 215, 0, 0.8);
   background: transparent;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5),
-              0 0 60px var(--glow-color, #FFD700);
+    0 0 60px var(--glow-color, #FFD700);
   animation: showcase-appear 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
   overflow: hidden;
   cursor: default;
@@ -1711,13 +1700,19 @@ onUnmounted(() => {
   left: -100%;
   width: 50%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
   animation: shine 3s ease-in-out infinite;
 }
 
 @keyframes shine {
-  0% { left: -100%; }
-  50%, 100% { left: 150%; }
+  0% {
+    left: -100%;
+  }
+
+  50%,
+  100% {
+    left: 150%;
+  }
 }
 
 @keyframes showcase-appear {
@@ -1726,6 +1721,7 @@ onUnmounted(() => {
     transform: translateY(50px) scale(0.8) rotateX(-15deg);
     filter: blur(10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1) rotateX(0deg);
@@ -1784,6 +1780,7 @@ onUnmounted(() => {
     opacity: 0;
     transform: translateY(-20px) scale(0.8);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -2063,10 +2060,14 @@ onUnmounted(() => {
   left: 0;
   width: 100%;
   height: 25%;
-  z-index: 300;
+  /* 默认 25% */
+  z-index: 999;
   pointer-events: none;
   overflow: hidden;
-  mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+}
+
+.danmaku-container.full-screen {
+  height: 100%;
 }
 
 .danmaku-item {
@@ -2084,6 +2085,7 @@ onUnmounted(() => {
   from {
     transform: translateX(0);
   }
+
   to {
     transform: translateX(-150vw);
   }

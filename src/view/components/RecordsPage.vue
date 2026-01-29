@@ -305,6 +305,19 @@ function getRarityClass(prizeName) {
   return 'rarity-common'
 }
 
+// 格式化日期
+function formatDate(dateStr) {
+  if (!dateStr) return '-'
+  const date = new Date(dateStr)
+  if (isNaN(date.getTime())) return dateStr
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  const hh = String(date.getHours()).padStart(2, '0')
+  const min = String(date.getMinutes()).padStart(2, '0')
+  const ss = String(date.getSeconds()).padStart(2, '0')
+  return `${mm}-${dd} ${hh}:${min}:${ss}`
+}
+
 // 分页函数
 function goToPage(page) {
   if (page >= 1 && page <= totalPages.value) {
@@ -339,9 +352,9 @@ function exportRecords() {
     中奖人: r.winnerName,
     部门: r.winnerDept,
     联系方式: r.winnerContact,
-    抽奖时间: r.drawTime,
+    抽奖时间: formatDate(r.drawTime),
     状态: getStatusText(r.status),
-    领取时间: r.claimedTime || '-'
+    领取时间: r.claimedTime ? formatDate(r.claimedTime) : '-'
   }))
 
   const worksheet = XLSX.utils.json_to_sheet(data)
@@ -357,10 +370,11 @@ function resetParticipantStatus(record) {
     '重置参与状态',
     `确定要将 "${record.winnerName}" 的参与状态重置为待抽奖吗？\n\n注意：此操作将从中奖名单中移除该记录，且无法撤销。`,
     () => {
-      // 1. 更新参与人员状态为待抽奖
+      // 1. 更新参与人员状态为待抽奖（优先使用 winnerId 匹配）
       const participants = loadParticipants()
       const participantIndex = participants.findIndex(p =>
-        p.name === record.winnerName && p.department === record.winnerDept
+        p.id === record.winnerId ||
+        (p.name === record.winnerName && p.department === record.winnerDept)
       )
 
       if (participantIndex !== -1) {
@@ -370,7 +384,15 @@ function resetParticipantStatus(record) {
       }
 
       // 2. 从当前中奖记录列表中移除该记录
-      records.value = records.value.filter(r => r.id !== record.id)
+      // 使用 findIndex + splice 确保只删除一条记录（处理旧数据可能存在的重复 ID 问题）
+      const recordIndex = records.value.findIndex(r =>
+        r.id === record.id &&
+        r.winnerId === record.winnerId &&
+        r.winnerName === record.winnerName
+      )
+      if (recordIndex !== -1) {
+        records.value.splice(recordIndex, 1)
+      }
       saveToCache()
 
       showAlertModal('操作成功', `已将 "${record.winnerName}" 重置为待抽奖状态，并从名单中移除`)
@@ -472,12 +494,7 @@ watch([searchQuery, statusFilter, prizeFilter], () => {
     <div class="filter-section">
       <div class="search-box">
         <span class="material-symbols-outlined search-icon">search</span>
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="搜索中奖人、奖项..."
-          class="search-input"
-        />
+        <input v-model="searchQuery" type="text" placeholder="搜索中奖人、奖项..." class="search-input" />
       </div>
       <div class="custom-dropdown">
         <button class="dropdown-trigger" @click.stop="togglePrizeDropdown">
@@ -486,20 +503,11 @@ watch([searchQuery, statusFilter, prizeFilter], () => {
         </button>
         <Transition name="dropdown">
           <div v-if="prizeDropdownOpen" class="dropdown-menu">
-            <button
-              class="dropdown-item"
-              :class="{ active: prizeFilter === 'all' }"
-              @click="selectPrize('all')"
-            >
+            <button class="dropdown-item" :class="{ active: prizeFilter === 'all' }" @click="selectPrize('all')">
               全部奖项
             </button>
-            <button
-              v-for="name in prizeNames"
-              :key="name"
-              class="dropdown-item"
-              :class="{ active: prizeFilter === name }"
-              @click="selectPrize(name)"
-            >
+            <button v-for="name in prizeNames" :key="name" class="dropdown-item"
+              :class="{ active: prizeFilter === name }" @click="selectPrize(name)">
               {{ name }}
             </button>
           </div>
@@ -508,25 +516,20 @@ watch([searchQuery, statusFilter, prizeFilter], () => {
 
       <div class="custom-dropdown">
         <button class="dropdown-trigger" @click.stop="toggleStatusDropdown">
-          <span class="trigger-text">{{ statusOptions.find(o => o.value === statusFilter)?.label }}</span>
+          <span class="trigger-text">{{statusOptions.find(o => o.value === statusFilter)?.label}}</span>
           <span class="dropdown-arrow" :class="{ open: statusDropdownOpen }">▼</span>
         </button>
         <Transition name="dropdown">
           <div v-if="statusDropdownOpen" class="dropdown-menu">
-            <button
-              v-for="opt in statusOptions"
-              :key="opt.value"
-              class="dropdown-item"
-              :class="{ active: statusFilter === opt.value }"
-              @click="selectStatus(opt.value)"
-            >
+            <button v-for="opt in statusOptions" :key="opt.value" class="dropdown-item"
+              :class="{ active: statusFilter === opt.value }" @click="selectStatus(opt.value)">
               {{ opt.label }}
             </button>
           </div>
         </Transition>
       </div>
-      <button v-if="searchQuery || statusFilter !== 'all' || prizeFilter !== 'all'"
-              class="reset-btn" @click="resetFilters">
+      <button v-if="searchQuery || statusFilter !== 'all' || prizeFilter !== 'all'" class="reset-btn"
+        @click="resetFilters">
         <span class="material-symbols-outlined">clear</span>
         重置
       </button>
@@ -562,14 +565,11 @@ watch([searchQuery, statusFilter, prizeFilter], () => {
             </tr>
           </thead>
           <tbody>
-            <tr
-              v-for="record in currentPageData"
-              :key="record.id"
-              class="data-row"
-            >
+            <tr v-for="record in currentPageData" :key="record.id" class="data-row">
               <td class="td-prize">
                 <div class="prize-cell">
-                  <div class="prize-image" :style="record.prizeImage ? { backgroundImage: `url(${record.prizeImage})` } : {}">
+                  <div class="prize-image"
+                    :style="record.prizeImage ? { backgroundImage: `url(${record.prizeImage})` } : {}">
                     <span v-if="!record.prizeImage" class="material-symbols-outlined">gift</span>
                   </div>
                   <div class="prize-info">
@@ -589,9 +589,9 @@ watch([searchQuery, statusFilter, prizeFilter], () => {
                 </div>
               </td>
               <td class="td-time">
-                <span class="draw-time">{{ record.drawTime }}</span>
+                <span class="draw-time">{{ formatDate(record.drawTime) }}</span>
                 <span v-if="record.claimedTime" class="claimed-time">
-                  领取于 {{ record.claimedTime }}
+                  领取于 {{ formatDate(record.claimedTime) }}
                 </span>
               </td>
               <td class="td-status">
@@ -624,29 +624,16 @@ watch([searchQuery, statusFilter, prizeFilter], () => {
           显示第 {{ pageStart }} 至 {{ pageEnd }} 条记录，共 {{ totalRecords }} 条
         </p>
         <div class="pagination">
-          <button
-            class="page-btn"
-            :disabled="currentPage === 1"
-            @click="prevPage"
-          >
+          <button class="page-btn" :disabled="currentPage === 1" @click="prevPage">
             &lt;
           </button>
           <div class="page-numbers">
-            <button
-              v-for="page in totalPages"
-              :key="page"
-              class="page-number"
-              :class="{ active: currentPage === page }"
-              @click="goToPage(page)"
-            >
+            <button v-for="page in totalPages" :key="page" class="page-number" :class="{ active: currentPage === page }"
+              @click="goToPage(page)">
               {{ page }}
             </button>
           </div>
-          <button
-            class="page-btn"
-            :disabled="currentPage === totalPages"
-            @click="nextPage"
-          >
+          <button class="page-btn" :disabled="currentPage === totalPages" @click="nextPage">
             &gt;
           </button>
         </div>
@@ -666,7 +653,8 @@ watch([searchQuery, statusFilter, prizeFilter], () => {
             </button>
           </div>
           <div class="modal-body">
-            <div class="modal-icon" :class="{ 'icon-alert': modalType === 'alert', 'icon-confirm': modalType === 'confirm' }">
+            <div class="modal-icon"
+              :class="{ 'icon-alert': modalType === 'alert', 'icon-confirm': modalType === 'confirm' }">
               <span class="material-symbols-outlined">
                 {{ modalType === 'alert' ? 'check_circle' : 'help' }}
               </span>
@@ -677,7 +665,8 @@ watch([searchQuery, statusFilter, prizeFilter], () => {
             <button v-if="modalType === 'confirm'" class="modal-btn modal-btn-cancel" @click="handleModalClose">
               取消
             </button>
-            <button class="modal-btn modal-btn-confirm" :class="{ 'loading': modalLoading }" @click="handleModalConfirm" :disabled="modalLoading">
+            <button class="modal-btn modal-btn-confirm" :class="{ 'loading': modalLoading }" @click="handleModalConfirm"
+              :disabled="modalLoading">
               <span v-if="modalLoading" class="loading-spinner"></span>
               <span>{{ modalLoading ? '处理中...' : '确定' }}</span>
             </button>
@@ -720,13 +709,8 @@ watch([searchQuery, statusFilter, prizeFilter], () => {
               <Teleport to="body">
                 <Transition name="dropdown">
                   <div v-if="clearPrizeDropdownOpen" class="clear-prize-dropdown" :style="clearDropdownStyle">
-                    <button
-                      v-for="name in prizeNames"
-                      :key="name"
-                      class="dropdown-item"
-                      :class="{ active: selectedPrizeToClear === name }"
-                      @click="selectClearPrize(name)"
-                    >
+                    <button v-for="name in prizeNames" :key="name" class="dropdown-item"
+                      :class="{ active: selectedPrizeToClear === name }" @click="selectClearPrize(name)">
                       {{ name }}
                     </button>
                   </div>
@@ -738,11 +722,8 @@ watch([searchQuery, statusFilter, prizeFilter], () => {
             <button class="modal-btn modal-btn-cancel" @click="showClearPrizeModal = false">
               取消
             </button>
-            <button
-              class="modal-btn modal-btn-confirm"
-              :disabled="!selectedPrizeToClear || clearPrizeLoading"
-              @click="confirmClearPrizeRecords"
-            >
+            <button class="modal-btn modal-btn-confirm" :disabled="!selectedPrizeToClear || clearPrizeLoading"
+              @click="confirmClearPrizeRecords">
               <span v-if="clearPrizeLoading" class="loading-spinner"></span>
               {{ clearPrizeLoading ? '处理中...' : '确定清空' }}
             </button>

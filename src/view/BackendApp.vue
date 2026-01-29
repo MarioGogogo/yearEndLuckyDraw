@@ -67,8 +67,7 @@ const settings = ref({
 // 统计数据计算
 const prizeCount = computed(() => prizes.value.length)
 const winnerCount = computed(() => {
-  const records = loadWinnerRecords()
-  return records.length
+  return prizes.value.reduce((sum, prize) => sum + (prize.count || 0), 0)
 })
 const totalCount = computed(() => {
   return prizes.value.reduce((sum, prize) => sum + (prize.count || 0), 0)

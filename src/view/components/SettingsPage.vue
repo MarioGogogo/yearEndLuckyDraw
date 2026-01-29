@@ -41,8 +41,9 @@ const defaultSettings = {
 
   // 显示设置
   showWinnerAvatar: false,         // 显示中奖人头像
-  showWinnerDept: false,           // 显示中奖人部门
+  showWinnerDept: true,            // 显示中奖人部门
   barrageEnabled: true,            // 开启弹幕
+  fullScreenBarrageEnabled: true, // 开启全屏弹幕
   confirmBeforeAward: false         // 颁奖前确认
 }
 
@@ -213,18 +214,11 @@ function handleOutsideClick(e) {
         <p>配置抽奖系统的全局参数。</p>
       </div>
       <div class="header-actions">
-        <button
-          class="reset-btn"
-          @click="handleReset"
-        >
+        <button class="reset-btn" @click="handleReset">
           <span class="material-symbols-outlined">refresh</span>
           恢复默认
         </button>
-        <button
-          class="save-btn"
-          :disabled="!hasChanges"
-          @click="handleSave"
-        >
+        <button class="save-btn" :disabled="!hasChanges" @click="handleSave">
           <span class="material-symbols-outlined">save</span>
           保存设置
         </button>
@@ -261,22 +255,15 @@ function handleOutsideClick(e) {
               <p>每人最多可中奖几次</p>
             </div>
             <div class="custom-dropdown">
-              <button
-                class="dropdown-trigger"
-                @click="toggleMaxWinDropdown"
-              >
-                <span class="trigger-text">{{ maxWinOptions.find(o => o.value === settings.maxWinPerPerson)?.label }}</span>
+              <button class="dropdown-trigger" @click="toggleMaxWinDropdown">
+                <span class="trigger-text">{{maxWinOptions.find(o => o.value === settings.maxWinPerPerson)?.label
+                }}</span>
                 <span class="dropdown-arrow" :class="{ open: maxWinDropdownOpen }">▼</span>
               </button>
               <Transition name="dropdown">
                 <div v-if="maxWinDropdownOpen" class="dropdown-menu">
-                  <button
-                    v-for="opt in maxWinOptions"
-                    :key="opt.value"
-                    class="dropdown-item"
-                    :class="{ active: settings.maxWinPerPerson === opt.value }"
-                    @click="selectMaxWin(opt.value)"
-                  >
+                  <button v-for="opt in maxWinOptions" :key="opt.value" class="dropdown-item"
+                    :class="{ active: settings.maxWinPerPerson === opt.value }" @click="selectMaxWin(opt.value)">
                     {{ opt.label }}
                   </button>
                 </div>
@@ -349,22 +336,14 @@ function handleOutsideClick(e) {
               <p>选择抽奖页面的展示风格</p>
             </div>
             <div class="custom-dropdown">
-              <button
-                class="dropdown-trigger"
-                @click="togglePageModeDropdown"
-              >
-                <span class="trigger-text">{{ pageModeOptions.find(o => o.value === settings.pageMode)?.label }}</span>
+              <button class="dropdown-trigger" @click="togglePageModeDropdown">
+                <span class="trigger-text">{{pageModeOptions.find(o => o.value === settings.pageMode)?.label}}</span>
                 <span class="dropdown-arrow" :class="{ open: pageModeDropdownOpen }">▼</span>
               </button>
               <Transition name="dropdown">
                 <div v-if="pageModeDropdownOpen" class="dropdown-menu">
-                  <button
-                    v-for="opt in pageModeOptions"
-                    :key="opt.value"
-                    class="dropdown-item"
-                    :class="{ active: settings.pageMode === opt.value }"
-                    @click="selectPageMode(opt.value)"
-                  >
+                  <button v-for="opt in pageModeOptions" :key="opt.value" class="dropdown-item"
+                    :class="{ active: settings.pageMode === opt.value }" @click="selectPageMode(opt.value)">
                     {{ opt.label }}
                   </button>
                 </div>
@@ -388,17 +367,9 @@ function handleOutsideClick(e) {
           <div class="setting-item vertical">
             <label>动画时长</label>
             <div class="speed-options">
-              <label
-                v-for="option in speedOptions"
-                :key="option.value"
-                class="speed-option"
-                :class="{ active: settings.animationSpeed === option.value }"
-              >
-                <input
-                  v-model="settings.animationSpeed"
-                  type="radio"
-                  :value="option.value"
-                />
+              <label v-for="option in speedOptions" :key="option.value" class="speed-option"
+                :class="{ active: settings.animationSpeed === option.value }">
+                <input v-model="settings.animationSpeed" type="radio" :value="option.value" />
                 <span class="speed-label">{{ option.label }}</span>
                 <span class="speed-desc">{{ option.desc }}</span>
               </label>
@@ -478,18 +449,10 @@ function handleOutsideClick(e) {
           <div class="setting-item vertical" :class="{ disabled: !settings.countdownEnabled }">
             <label>确认倒计时</label>
             <div class="countdown-options">
-              <label
-                v-for="sec in countdownOptions"
-                :key="sec"
-                class="countdown-option"
-                :class="{ active: settings.countdownSeconds === sec }"
-              >
-                <input
-                  v-model="settings.countdownSeconds"
-                  type="radio"
-                  :value="sec"
-                  :disabled="!settings.countdownEnabled"
-                />
+              <label v-for="sec in countdownOptions" :key="sec" class="countdown-option"
+                :class="{ active: settings.countdownSeconds === sec }">
+                <input v-model="settings.countdownSeconds" type="radio" :value="sec"
+                  :disabled="!settings.countdownEnabled" />
                 <span>{{ sec }} 秒</span>
               </label>
             </div>
@@ -564,6 +527,17 @@ function handleOutsideClick(e) {
               <span class="toggle-slider"></span>
             </label>
           </div>
+
+          <div class="setting-item" :class="{ disabled: !settings.barrageEnabled }">
+            <div class="setting-info">
+              <label>全屏弹幕</label>
+              <p>弹幕在全屏范围内显示，否则只在顶部 25% 显示</p>
+            </div>
+            <label class="toggle-switch">
+              <input v-model="settings.fullScreenBarrageEnabled" type="checkbox" :disabled="!settings.barrageEnabled" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
         </div>
       </div>
     </div>
@@ -588,7 +562,8 @@ function handleOutsideClick(e) {
             </button>
           </div>
           <div class="modal-body">
-            <div class="modal-icon" :class="{ 'icon-alert': modalType === 'alert', 'icon-confirm': modalType === 'confirm' }">
+            <div class="modal-icon"
+              :class="{ 'icon-alert': modalType === 'alert', 'icon-confirm': modalType === 'confirm' }">
               <span class="material-symbols-outlined">
                 {{ modalType === 'alert' ? 'check_circle' : 'help' }}
               </span>
@@ -599,7 +574,8 @@ function handleOutsideClick(e) {
             <button v-if="modalType === 'confirm'" class="modal-btn modal-btn-cancel" @click="handleModalClose">
               取消
             </button>
-            <button class="modal-btn modal-btn-confirm" :class="{ 'loading': modalLoading }" @click="handleModalConfirm" :disabled="modalLoading">
+            <button class="modal-btn modal-btn-confirm" :class="{ 'loading': modalLoading }" @click="handleModalConfirm"
+              :disabled="modalLoading">
               <span v-if="modalLoading" class="loading-spinner"></span>
               <span>{{ modalLoading ? '处理中...' : '确定' }}</span>
             </button>
@@ -1004,16 +980,16 @@ function handleOutsideClick(e) {
   transition: all 0.3s;
 }
 
-.toggle-switch input:checked + .toggle-slider {
+.toggle-switch input:checked+.toggle-slider {
   background: #f42525;
 }
 
-.toggle-switch input:checked + .toggle-slider::before {
+.toggle-switch input:checked+.toggle-slider::before {
   transform: translateX(1.5rem);
   border-color: #f42525;
 }
 
-.toggle-switch input:disabled + .toggle-slider {
+.toggle-switch input:disabled+.toggle-slider {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -1059,11 +1035,11 @@ function handleOutsideClick(e) {
   transition: all 0.2s;
 }
 
-.radio-item input:checked + .radio-custom {
+.radio-item input:checked+.radio-custom {
   border-color: #f42525;
 }
 
-.radio-item input:checked + .radio-custom::before {
+.radio-item input:checked+.radio-custom::before {
   content: '';
   position: absolute;
   top: 50%;

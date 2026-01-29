@@ -5,6 +5,7 @@ import {
   loadParticipants,
   loadPrizes,
   loadWinnerRecords,
+  loadSettings,
   getEligibleParticipants,
   addWinnerRecord,
   isPrizeCompleted
@@ -67,6 +68,7 @@ const eligibleList = ref([])
 const prizes = ref([])
 const currentPrizeIndex = ref(0)
 const winnerRecords = ref([])
+const settings = ref({})
 const showPrizeSelector = ref(false)
 
 // 动画相关
@@ -311,6 +313,7 @@ const loadData = () => {
   }
 
   winnerRecords.value = loadWinnerRecords()
+  settings.value = loadSettings() || {}
 }
 
 // 背景动画 - 粒子类
@@ -578,7 +581,13 @@ const initDanmaku = () => {
       const layerOffset = (Math.random() - 0.5) * 4 // 每层内微调 ±2%
       top = 5 + layer * 9 + layerOffset // 从5%开始，每层间隔9%
     } else {
-      top = Math.random() * 90
+      // 互动设置中是否开启全屏弹幕
+      const isFullScreenBarrage = settings.value?.fullScreenBarrageEnabled !== false
+      if (isFullScreenBarrage) {
+        top = 5 + Math.random() * 85 // 在 5% - 90% 范围内随机分布
+      } else {
+        top = Math.random() * 20 // 限制在顶部 20% 范围内
+      }
     }
 
     // 优化延迟时间：大奖弹幕延迟范围更长，分批出现
@@ -750,12 +759,8 @@ onUnmounted(() => {
       <div class="stage">
         <!-- 马的图片 -->
         <div class="horse-wrapper">
-          <img
-            src="/madaocgong/horse.png"
-            alt="Running Horse"
-            class="horse-img"
-            :style="{ animationDuration: horseAnimationDuration }"
-          >
+          <img src="/madaocgong/horse.png" alt="Running Horse" class="horse-img"
+            :style="{ animationDuration: horseAnimationDuration }">
         </div>
 
         <!-- 名字显示区域 -->
@@ -771,11 +776,7 @@ onUnmounted(() => {
               </template>
               <template v-else>
                 <div class="winner-grid">
-                  <div
-                    v-for="(w, idx) in winnerList"
-                    :key="idx"
-                    class="winner-grid-item"
-                  >
+                  <div v-for="(w, idx) in winnerList" :key="idx" class="winner-grid-item">
                     {{ w.name }}
                   </div>
                 </div>
@@ -788,23 +789,14 @@ onUnmounted(() => {
 
     <!-- 孔明灯层 -->
     <div class="lanterns-layer">
-      <div
-        v-for="lantern in lanterns"
-        :key="lantern.id"
-        class="lantern"
-        :style="{
-          left: lantern.x + '%',
-          top: lantern.y + 'px',
-          transform: `translateX(-50%) scale(${lantern.scale})`,
-          opacity: lantern.opacity
-        }"
-      >
+      <div v-for="lantern in lanterns" :key="lantern.id" class="lantern" :style="{
+        left: lantern.x + '%',
+        top: lantern.y + 'px',
+        transform: `translateX(-50%) scale(${lantern.scale})`,
+        opacity: lantern.opacity
+      }">
         <!-- 灯体 -->
-        <img
-          :src="`/images/${lanternImages[lantern.imageIndex]}`"
-          class="lantern-body"
-          alt="孔明灯"
-        >
+        <img :src="`/images/${lanternImages[lantern.imageIndex]}`" class="lantern-body" alt="孔明灯">
         <!-- 名字（灯中心） -->
         <div class="lantern-name">{{ lantern.name }}</div>
         <!-- 尾巴 -->
@@ -823,13 +815,9 @@ onUnmounted(() => {
     </div>
 
     <!-- 弹幕层 -->
-    <div v-if="drawStatus === 'RESULT' && danmakuList.length > 0" class="danmaku-container">
-      <div
-        v-for="item in danmakuList"
-        :key="item.id"
-        class="danmaku-item"
-        :style="item.style"
-      >
+    <div v-if="drawStatus === 'RESULT' && danmakuList.length > 0 && settings?.barrageEnabled !== false"
+      class="danmaku-container" :class="{ 'full-screen': settings?.fullScreenBarrageEnabled !== false }">
+      <div v-for="item in danmakuList" :key="item.id" class="danmaku-item" :style="item.style">
         {{ item.text }}
       </div>
     </div>
@@ -837,11 +825,7 @@ onUnmounted(() => {
     <!-- 底部控制区 -->
     <footer class="screen-footer">
       <div class="control-area">
-        <button
-          class="main-btn"
-          :class="drawStatus === STATE.RUNNING ? 'stop-btn' : 'start-btn'"
-          @click="toggleDraw"
-        >
+        <button class="main-btn" :class="drawStatus === STATE.RUNNING ? 'stop-btn' : 'start-btn'" @click="toggleDraw">
           {{ drawStatus === STATE.RUNNING ? '停止抽奖' : '开始抽奖' }}
         </button>
         <span class="keyboard-hint">按空格键也可以</span>
@@ -861,24 +845,14 @@ onUnmounted(() => {
       </div>
       <transition name="fade">
         <div v-if="showPrizeSelector" class="prize-options">
-          <div
-            v-for="(p, i) in prizes"
-            :key="i"
-            class="prize-option"
-            :class="{ active: i === currentPrizeIndex }"
-            @click="selectPrize(i)"
-          >
+          <div v-for="(p, i) in prizes" :key="i" class="prize-option" :class="{ active: i === currentPrizeIndex }"
+            @click="selectPrize(i)">
             {{ p.name }}
           </div>
         </div>
       </transition>
       <!-- 下一奖项按钮 -->
-      <button
-        v-if="canGoToNextPrize"
-        class="next-prize-btn"
-        @click="goToNextPrize"
-        title="切换到高一级奖项"
-      >
+      <button v-if="canGoToNextPrize" class="next-prize-btn" @click="goToNextPrize" title="切换到高一级奖项">
         <span class="material-symbols-outlined">arrow_upward</span>
         下一奖项
       </button>
@@ -911,13 +885,14 @@ onUnmounted(() => {
 .app-container {
   position: relative;
   width: 100%;
-  height: calc(100vh - 100px); /* 留出底部控制区空间 */
+  height: calc(100vh - 100px);
+  /* 留出底部控制区空间 */
   z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.4) 100%);
+  background: radial-gradient(circle at center, transparent 0%, rgba(0, 0, 0, 0.4) 100%);
 }
 
 /* 标题 */
@@ -935,14 +910,14 @@ onUnmounted(() => {
   background: linear-gradient(to bottom, #FFD700, #BF953F);
   -webkit-background-clip: text;
   background-clip: text;
-  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
   letter-spacing: 0.5rem;
   animation: float 4s ease-in-out infinite;
   margin: 0;
 }
 
 .subtitle {
-font-family: 'Ma Shan Zheng', cursive;
+  font-family: 'Ma Shan Zheng', cursive;
   font-size: 2.5vh;
   color: #FFF8D6;
   letter-spacing: 0.8rem;
@@ -970,7 +945,7 @@ font-family: 'Ma Shan Zheng', cursive;
   width: 50vh;
   height: 50vh;
   z-index: 15;
-  filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5));
+  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.5));
 }
 
 .horse-img {
@@ -981,13 +956,25 @@ font-family: 'Ma Shan Zheng', cursive;
 }
 
 @keyframes gallop {
-  0% { transform: translateY(0) rotate(0deg); }
-  100% { transform: translateY(-15px) rotate(2deg); }
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  100% {
+    transform: translateY(-15px) rotate(2deg);
+  }
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
 }
 
 /* 抽奖显示 */
@@ -1029,8 +1016,15 @@ font-family: 'Ma Shan Zheng', cursive;
 }
 
 @keyframes popIn {
-  0% { transform: scale(0); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .winner-label {
@@ -1047,7 +1041,7 @@ font-family: 'Ma Shan Zheng', cursive;
   font-family: 'Ma Shan Zheng', cursive;
   font-size: 12vh;
   color: #FFD700;
-  text-shadow: 0 0 10px rgba(0,0,0,0.5);
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
 .winner-grid {
@@ -1063,9 +1057,9 @@ font-family: 'Ma Shan Zheng', cursive;
   font-family: 'Ma Shan Zheng', cursive;
   font-size: 3vh;
   color: #FFD700;
-  text-shadow: 0 0 5px rgba(0,0,0,0.5);
+  text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
   padding: 10px 15px;
-  background: rgba(0,0,0,0.2);
+  background: rgba(0, 0, 0, 0.2);
   border: 1px solid #FFD700;
   border-radius: 8px;
   text-align: center;
@@ -1084,7 +1078,7 @@ font-family: 'Ma Shan Zheng', cursive;
   justify-content: center;
   align-items: center;
   z-index: 100;
-  background: linear-gradient(to top, rgba(0,0,0,0.5), transparent);
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.5), transparent);
 }
 
 .control-area {
@@ -1260,11 +1254,13 @@ font-family: 'Ma Shan Zheng', cursive;
   color: #aaa;
 }
 
-.fade-enter-active, .fade-leave-active {
+.fade-enter-active,
+.fade-leave-active {
   transition: all 0.3s ease;
 }
 
-.fade-enter-from, .fade-leave-to {
+.fade-enter-from,
+.fade-leave-to {
   opacity: 0;
   transform: translateY(10px);
 }
@@ -1387,10 +1383,14 @@ font-family: 'Ma Shan Zheng', cursive;
   left: 0;
   width: 100%;
   height: 25%;
-  z-index: 300;
+  /* 默认 25% */
+  z-index: 999;
   pointer-events: none;
   overflow: hidden;
-  mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+}
+
+.danmaku-container.full-screen {
+  height: 100%;
 }
 
 .danmaku-item {
@@ -1408,6 +1408,7 @@ font-family: 'Ma Shan Zheng', cursive;
   from {
     transform: translateX(0);
   }
+
   to {
     transform: translateX(-150vw);
   }
