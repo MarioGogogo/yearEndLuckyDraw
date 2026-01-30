@@ -228,6 +228,10 @@ const isCurrentPrizeAvailable = computed(() => {
   return !isPrizeCompleted(currentPrize.value)
 })
 
+// 中奖人信息显示（参考 Sphere3DScreen.vue）
+const showAvatar = computed(() => settings.value?.showWinnerAvatar)
+const showDept = computed(() => settings.value?.showWinnerDept)
+
 // 单次抽取人数
 const batchCount = computed(() => currentPrize.value.batchCount || currentPrize.value.count || 1)
 
@@ -313,7 +317,13 @@ const loadData = () => {
   }
 
   winnerRecords.value = loadWinnerRecords()
-  settings.value = loadSettings() || {}
+  settings.value = loadSettings() || {
+    showWinnerAvatar: false,         // 默认关闭头像显示
+    showWinnerDept: false,           // 默认关闭部门显示
+    barrageEnabled: true,
+    fullScreenBarrageEnabled: true,
+    enableSpecialBackground: true    // 默认启用特殊背景
+  }
 }
 
 // 背景动画 - 粒子类
@@ -556,8 +566,8 @@ const finalizeDraw = () => {
 const initDanmaku = () => {
   danmakuList.value = []
 
-  // 判断是否为大奖环节（有中奖者人名列表且人数少于5人）
-  const isGrandPrize = grandPrizeWinnerNames.length > 0 && grandPrizeWinnerNames.length < 5
+  // 判断是否为大奖环节（根据该奖项总中奖人数，少于5人为大奖）
+  const isGrandPrize = totalPrizeCount.value > 0 && totalPrizeCount.value < 5
   const count = isGrandPrize ? 100 : 40
   const textsPool = isGrandPrize ? grandPrizeDanmakuTexts : danmakuTexts
 
@@ -743,9 +753,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="yima-container">
+  <div class="yima-container" :class="{ 'plain-bg': settings?.enableSpecialBackground === false }">
     <!-- 背景 Canvas -->
-    <canvas ref="bgCanvasRef" class="bg-canvas"></canvas>
+    <canvas v-if="settings?.enableSpecialBackground !== false" ref="bgCanvasRef" class="bg-canvas"></canvas>
 
     <!-- 主容器 -->
     <div class="app-container">
@@ -772,12 +782,18 @@ onUnmounted(() => {
             <div class="winner-label">恭喜</div>
             <div ref="winnerContainerRef" class="winner-container" :class="{ 'single': winnerList.length === 1 }">
               <template v-if="winnerList.length === 1">
-                <div class="winner-name single">{{ winnerList[0]?.name }}</div>
+                <div class="winner-name-wrapper single">
+                  <div class="winner-name single">{{ winnerList[0]?.name }}</div>
+                  <div v-if="showDept && winnerList[0]?.department" class="winner-dept-single">
+                    {{ winnerList[0]?.department }}
+                  </div>
+                </div>
               </template>
               <template v-else>
                 <div class="winner-grid">
                   <div v-for="(w, idx) in winnerList" :key="idx" class="winner-grid-item">
-                    {{ w.name }}
+                    <div class="winner-grid-name">{{ w.name }}</div>
+                    <div v-if="showDept && w.department" class="winner-grid-dept">{{ w.department }}</div>
                   </div>
                 </div>
               </template>
@@ -828,13 +844,12 @@ onUnmounted(() => {
         <button class="main-btn" :class="drawStatus === STATE.RUNNING ? 'stop-btn' : 'start-btn'" @click="toggleDraw">
           {{ drawStatus === STATE.RUNNING ? '停止抽奖' : '开始抽奖' }}
         </button>
-        <span class="keyboard-hint">按空格键也可以</span>
       </div>
     </footer>
 
     <!-- 奖项选择器 - 左下角 -->
     <div class="prize-selector">
-      <button class="prize-selector-btn" @click="showPrizeSelector = !showPrizeSelector">
+      <button v-if="false" class="prize-selector-btn" @click="showPrizeSelector = !showPrizeSelector">
         {{ currentPrize.name || '选择奖项' }}
         <span class="arrow">{{ showPrizeSelector ? '▲' : '▼' }}</span>
       </button>
@@ -871,6 +886,16 @@ onUnmounted(() => {
   height: 100vh;
   overflow: hidden;
   position: relative;
+  background: #8B0000;
+}
+
+/* 普通背景（禁用特殊背景时） */
+.yima-container.plain-bg {
+  background: radial-gradient(circle at center,
+      #FF4444 0%,
+      #DC143C 30%,
+      #8B0000 60%,
+      #580507 100%);
 }
 
 .bg-canvas {
@@ -1044,6 +1069,20 @@ onUnmounted(() => {
   text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
+.winner-name-wrapper.single {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1vh;
+}
+
+.winner-dept-single {
+  font-size: 4vh;
+  color: #FFF8D6;
+  opacity: 0.8;
+  font-family: 'Ma Shan Zheng', cursive;
+}
+
 .winner-grid {
   display: flex;
   flex-wrap: wrap;
@@ -1055,7 +1094,6 @@ onUnmounted(() => {
 
 .winner-grid-item {
   font-family: 'Ma Shan Zheng', cursive;
-  font-size: 3vh;
   color: #FFD700;
   text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
   padding: 10px 15px;
@@ -1065,6 +1103,21 @@ onUnmounted(() => {
   text-align: center;
   flex: 0 1 auto;
   min-width: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.winner-grid-name {
+  font-size: 3vh;
+}
+
+.winner-grid-dept {
+  font-size: 1.6vh;
+  color: #FFF8D6;
+  opacity: 0.8;
 }
 
 /* 底部控制区 */

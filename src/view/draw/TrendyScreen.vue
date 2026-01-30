@@ -5,6 +5,7 @@ import {
   loadParticipants,
   loadPrizes,
   loadWinnerRecords,
+  loadSettings,
   getEligibleParticipants,
   addWinnerRecord,
   isPrizeCompleted
@@ -40,6 +41,11 @@ const currentPrize = computed(() => prizes.value[currentPrizeIndex.value] || {})
 const isCurrentPrizeAvailable = computed(() => {
   if (!currentPrize.value.id) return false
   return !isPrizeCompleted(currentPrize.value)
+})
+
+// 获取设置
+const settings = ref(loadSettings() || {
+  enableSpecialBackground: true
 })
 
 const totalWinners = computed(() => winnerRecords.value.length)
@@ -622,7 +628,7 @@ const goBack = () => {
 </script>
 
 <template>
-  <div class="mosaic-container">
+  <div class="mosaic-container" :class="{ 'plain-bg': settings?.enableSpecialBackground === false }">
     <div ref="containerRef" class="canvas-layer"></div>
     
     <!-- UI Overlay -->
@@ -651,7 +657,6 @@ const goBack = () => {
              <button class="action-btn" @click="toggleDraw">
                 {{ drawStatus !== 'idle' && drawStatus !== 'result' ? '停止' : '开始抽奖' }}
              </button>
-             <span class="keyboard-hint">按空格键也可以</span>
         </div>
 
         <!-- 中奖名单显示 -->
@@ -715,6 +720,15 @@ const goBack = () => {
   background: #8B0000; /* Festive Red */
   position: relative;
   overflow: hidden;
+}
+
+/* 普通背景（禁用特殊背景时） */
+.mosaic-container.plain-bg {
+  background: radial-gradient(circle at center,
+      #FF4444 0%,
+      #DC143C 30%,
+      #8B0000 60%,
+      #580507 100%);
 }
 
 .canvas-layer {

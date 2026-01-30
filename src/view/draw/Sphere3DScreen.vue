@@ -114,7 +114,8 @@ function loadSystemData() {
     barrageEnabled: true,
     bgmEnabled: true,
     sfxEnabled: true,
-    animationSpeed: 'normal'
+    animationSpeed: 'normal',
+    enableSpecialBackground: true    // 默认启用特殊背景
   }
 
   // 加载参与人员
@@ -760,8 +761,8 @@ function animateFireworks() {
 function initDanmaku() {
   danmakuList.value = []
 
-  // 判断是否为大奖环节（有中奖者人名列表且人数少于5人）
-  const isGrandPrize = grandPrizeWinnerNames.length > 0 && grandPrizeWinnerNames.length < 5
+  // 判断是否为大奖环节（根据该奖项总中奖人数，少于5人为大奖）
+  const isGrandPrize = totalPrizeCount.value > 0 && totalPrizeCount.value < 5
   const count = isGrandPrize ? 100 : 40
   const textsPool = isGrandPrize ? grandPrizeDanmakuTexts : danmakuTexts
 
@@ -1115,9 +1116,12 @@ onUnmounted(() => {
     </Transition>
 
     <!-- 动态背景层 -->
-    <div class="dynamic-bg">
+    <div v-if="settings?.enableSpecialBackground !== false" class="dynamic-bg">
       <div class="radial-gradient"></div>
     </div>
+
+    <!-- 马年水印背景 -->
+    <div v-if="settings?.enableSpecialBackground !== false" class="horse-watermark"></div>
 
     <!-- Canvas 粒子层 -->
     <canvas id="particle-canvas" class="particle-canvas"></canvas>
@@ -1297,6 +1301,15 @@ onUnmounted(() => {
   background: #1a0000;
 }
 
+/* 普通背景（禁用特殊背景时） */
+.sphere-screen:not(:has(.dynamic-bg)) {
+  background: radial-gradient(circle at center,
+      #FF4444 0%,
+      #DC143C 30%,
+      #8B0000 60%,
+      #580507 100%);
+}
+
 /* 配置提示弹窗 */
 .config-alert-overlay {
   position: fixed;
@@ -1390,6 +1403,19 @@ onUnmounted(() => {
       #8B0000 60%,
       #1a0000 100%);
   animation: pulse-gradient 3s ease-in-out infinite;
+}
+
+/* 马年水印背景 */
+.horse-watermark {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background-image: url('/images/horse-year.png');
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.22;
+  pointer-events: none;
 }
 
 @keyframes pulse-gradient {

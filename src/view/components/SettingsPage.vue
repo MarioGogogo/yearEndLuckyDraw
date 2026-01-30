@@ -44,7 +44,10 @@ const defaultSettings = {
   showWinnerDept: true,            // 显示中奖人部门
   barrageEnabled: true,            // 开启弹幕
   fullScreenBarrageEnabled: true, // 开启全屏弹幕
-  confirmBeforeAward: false         // 颁奖前确认
+  confirmBeforeAward: false,       // 颁奖前确认
+
+  // 背景设置
+  enableSpecialBackground: true    // 启用特殊背景（马年水印、渐变效果等）
 }
 
 // 本地状态
@@ -535,6 +538,30 @@ function handleOutsideClick(e) {
             </div>
             <label class="toggle-switch">
               <input v-model="settings.fullScreenBarrageEnabled" type="checkbox" :disabled="!settings.barrageEnabled" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 🎨 背景设置 -->
+      <div class="settings-card">
+        <div class="card-header">
+          <span class="card-icon">🎨</span>
+          <div>
+            <h3>背景设置</h3>
+            <p>控制页面背景效果显示</p>
+          </div>
+        </div>
+
+        <div class="card-body">
+          <div class="setting-item">
+            <div class="setting-info">
+              <label>启用特殊背景</label>
+              <p>启用马年水印、渐变等特殊背景效果</p>
+            </div>
+            <label class="toggle-switch">
+              <input v-model="settings.enableSpecialBackground" type="checkbox" />
               <span class="toggle-slider"></span>
             </label>
           </div>
