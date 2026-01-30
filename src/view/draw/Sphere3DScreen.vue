@@ -229,6 +229,7 @@ let animationId
 let particles = []
 let speedLines = []
 let floatingDots = []
+let orbitingLights = [] // 金光环绕粒子
 
 // 烟花独立 Canvas 上下文
 let fireworkCanvas, fireworkCtx
@@ -237,9 +238,12 @@ let fireworks = []
 let sparkParticles = []
 let showFireworks = ref(false)
 
-// 粒子类（名字）- Z轴飞行效果
+// 礼物盒元素引用
+const giftBoxRef = ref(null)
+
+// 粒子类（名字）- Z轴飞行效果（优化版：分批出现 + 飞出屏幕消失）
 class NameParticle {
-  constructor(centerX, centerY, name, isWinner = false, index = 0, total = 1, avatar = null, dept = '') {
+  constructor(centerX, centerY, name, isWinner = false, index = 0, total = 1, avatar = null, dept = '', batchIndex = 0) {
     this.name = name
     this.avatar = avatar
     this.dept = dept
@@ -248,35 +252,61 @@ class NameParticle {
     this.centerY = centerY
     this.index = index
     this.total = total
+    this.batchIndex = batchIndex // 批次索引，用于延迟出现
 
-    this.baseFontSize = 20 + Math.random() * 10
+    // 基础字体大小：增大基础值以获得更好的层次感
+    this.baseFontSize = 18 + Math.random() * 8
     this.reset()
   }
 
   reset() {
-    const goldenAngle = Math.PI * (3 - Math.sqrt(5))
-    const baseAngle = goldenAngle * this.index
-    const angleOffset = (Math.random() - 0.5) * 0.3
-    const angle = baseAngle + angleOffset
+    // 【分批延迟】每批延迟一定帧数后才开始飞行
+    // 每批间隔约 25 帧（约0.4秒），形成波浪式涌出效果
+    // 【同批次内也有微延迟】增加 0-15 帧的随机延迟，让同批次名字也有先后
+    this.delayFrames = this.batchIndex * 25 + Math.random() * 15
+    this.currentDelay = 0
+    this.hasStarted = false
 
-    const spreadRadius = 400 + Math.random() * 400
+    // 使用完全随机的角度，让每个名字飞向不同方向
+    const angle = Math.random() * Math.PI * 2
+
+    // 大幅扩大飞行半径，让名字能飞得更远、更分散
+    const spreadRadius = 700 + Math.random() * 800
 
     this.dirX = Math.cos(angle) * spreadRadius
     this.dirY = Math.sin(angle) * spreadRadius
 
-    const layerOffset = (this.index % 10) * 0.15
-    this.z = -layerOffset
-    this.zSpeed = 0.004 + Math.random() * 0.006
-    this.maxZ = 1.2
+    // 【层次感核心】初始 z 值大幅随机化
+    // 范围从 0.05 到 0.4，形成明显的远近层次
+    // 有些名字一开始就"更靠近"屏幕，有些"更远"
+    this.startZ = 0.05 + Math.random() * 0.35
+    this.z = -this.startZ  // 负值，等延迟后变正开始显示
+
+    // 【速度层次】速度差异大：从 0.006 到 0.025，差4倍
+    // 慢的名字会落在后面，快的会冲到前面
+    this.zSpeed = 0.006 + Math.random() * 0.019
+
+    // 增大maxZ使名字能飞得更远
+    this.maxZ = 2.0
 
     this.alpha = 0
-    this.edgeFade = 1
   }
 
   update(canvasWidth, canvasHeight) {
+    // 【分批延迟】：等待延迟帧数后才开始飞行
+    if (!this.hasStarted) {
+      this.currentDelay++
+      if (this.currentDelay < this.delayFrames) {
+        this.alpha = 0
+        return
+      }
+      this.hasStarted = true
+    }
+
     this.z += this.zSpeed
 
-    if (this.z < 0.01) {
+    // z值太小时不显示
+    if (this.z < 0.02) {
       this.alpha = 0
       return
     }
@@ -285,80 +315,94 @@ class NameParticle {
     const screenX = this.centerX + this.dirX * scale
     const screenY = this.centerY + this.dirY * scale
 
-    const edgeDistance = 250
-    let edgeFadeX = 1
-    let edgeFadeY = 1
+    // 保存当前屏幕位置供后续使用
+    this.screenX = screenX
+    this.screenY = screenY
 
-    if (screenX < edgeDistance) {
-      edgeFadeX = Math.max(0, screenX / edgeDistance)
-    } else if (screenX > canvasWidth - edgeDistance) {
-      edgeFadeX = Math.max(0, (canvasWidth - screenX) / edgeDistance)
-    }
-
-    if (screenY < edgeDistance) {
-      edgeFadeY = Math.max(0, screenY / edgeDistance)
-    } else if (screenY > canvasHeight - edgeDistance) {
-      edgeFadeY = Math.max(0, (canvasHeight - screenY) / edgeDistance)
-    }
-
-    this.edgeFade = Math.min(edgeFadeX, edgeFadeY)
-
+    // 淡入效果：根据初始深度调整淡入速度
+    // 初始就较大的粒子（startZ大）淡入更快
     let zAlpha = 1
-    if (this.z < 0.15) {
-      zAlpha = this.z / 0.15
-    } else if (this.z > 0.6) {
-      zAlpha = Math.max(0, (this.maxZ - this.z) / (this.maxZ - 0.6))
+    const fadeInEnd = 0.1 + this.startZ * 0.3  // 深度越大，淡入结束点越往后
+    if (this.z < fadeInEnd) {
+      zAlpha = this.z / fadeInEnd
     }
 
-    this.alpha = Math.max(0, Math.min(1, zAlpha * this.edgeFade))
+    this.alpha = Math.max(0, Math.min(1, zAlpha))
   }
 
   isDead() {
-    return this.z >= this.maxZ
+    // 判断是否完全飞出屏幕（考虑放大后的尺寸）
+    const margin = 300 // 给一些余量确保完全飞出
+    const isOutOfScreen = this.screenX < -margin ||
+      this.screenX > canvas.width + margin ||
+      this.screenY < -margin ||
+      this.screenY > canvas.height + margin
+    return this.z >= this.maxZ || isOutOfScreen
   }
 
   shouldRemove() {
-    return this.z >= this.maxZ || (this.z > 0.15 && this.alpha <= 0.01)
+    return this.isDead()
   }
 
   draw(ctx) {
-    if (this.z <= 0.01) return
+    if (this.z <= 0.02) return
 
     const scale = this.z / this.maxZ
     const screenX = this.centerX + this.dirX * scale
     const screenY = this.centerY + this.dirY * scale
 
+    // 【核心改动】增大字体放大倍率：从 2.5 提升到 6
+    // 让名字从小到大的变化更明显，靠近边缘时字非常大
     const normalizedZ = this.z / this.maxZ
-    const sizeScale = 0.3 + normalizedZ * 2.5
+    // 使用指数曲线让放大效果更自然：越靠近边缘增长越快
+    const sizeScale = 0.2 + Math.pow(normalizedZ, 1.3) * 6
     const fontSize = this.baseFontSize * sizeScale
 
-    if (screenX < -800 || screenX > canvas.width + 800 ||
-      screenY < -800 || screenY > canvas.height + 800) {
+    // 放宽边界检测，因为字体会变得很大
+    if (screenX < -500 || screenX > canvas.width + 500 ||
+      screenY < -500 || screenY > canvas.height + 500) {
       return
     }
 
     ctx.save()
     ctx.translate(screenX, screenY)
+
+    // 【层次感增强】根据z值调整颜色亮度和发光强度
+    // 远处：暗淡、小、发光弱
+    // 近处：明亮、大、发光强
+    const brightnessBoost = 0.6 + normalizedZ * 0.4 // 0.6 -> 1.0
+    const glowIntensity = 5 + normalizedZ * 25 // 5 -> 30
+
     ctx.globalAlpha = this.alpha
 
     ctx.font = `900 ${fontSize}px "Microsoft YaHei", sans-serif`
     const textWidth = ctx.measureText(this.name).width
-    const padding = 8 + sizeScale * 4
+    const padding = 6 + sizeScale * 3
 
+    // 动态渐变：根据z值调整颜色饱和度和亮度
     const gradient = ctx.createLinearGradient(-textWidth / 2 - padding, 0, textWidth / 2 + padding, 0)
-    gradient.addColorStop(0, this.isWinner ? 'rgba(255, 215, 0, 0.95)' : 'rgba(255, 215, 0, 0.85)')
-    gradient.addColorStop(1, this.isWinner ? 'rgba(255, 165, 0, 0.95)' : 'rgba(255, 140, 0, 0.85)')
+    if (this.isWinner) {
+      gradient.addColorStop(0, `rgba(255, ${Math.floor(215 * brightnessBoost)}, 0, 0.95)`)
+      gradient.addColorStop(1, `rgba(255, ${Math.floor(165 * brightnessBoost)}, 0, 0.95)`)
+    } else {
+      // 普通名字：根据深度调整亮度
+      const alphaBase = 0.7 + normalizedZ * 0.25
+      gradient.addColorStop(0, `rgba(255, ${Math.floor(215 * brightnessBoost)}, 0, ${alphaBase})`)
+      gradient.addColorStop(1, `rgba(255, ${Math.floor(140 * brightnessBoost)}, 0, ${alphaBase})`)
+    }
 
     ctx.fillStyle = gradient
-    ctx.shadowColor = 'rgba(255, 215, 0, 0.6)'
-    ctx.shadowBlur = 10 + sizeScale * 5
+    ctx.shadowColor = `rgba(255, 215, 0, ${0.4 + normalizedZ * 0.4})`
+    ctx.shadowBlur = glowIntensity
 
     const rectHeight = fontSize + padding
-    this.roundRect(ctx, -textWidth / 2 - padding, -fontSize / 2 - padding / 2, textWidth + padding * 2, rectHeight, 8)
+    this.roundRect(ctx, -textWidth / 2 - padding, -fontSize / 2 - padding / 2, textWidth + padding * 2, rectHeight, 6 + sizeScale * 1.5)
     ctx.fill()
 
     ctx.shadowBlur = 0
-    ctx.fillStyle = '#8B0000'
+    // 文字颜色也根据深度调整：远处偏暗红，近处鲜红
+    const redIntensity = Math.floor(100 + normalizedZ * 39) // 100 -> 139
+    ctx.fillStyle = `rgb(${redIntensity}, 0, 0)`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(this.name, 0, 0)
@@ -496,6 +540,71 @@ class FloatingDot {
   }
 }
 
+// 金光环绕粒子（模拟围绕礼物的流光）
+class OrbitingLight {
+  constructor(radius, speed, size, hue = 45) {
+    this.radius = radius // 基础半径
+    this.baseRadius = radius
+    this.angle = Math.random() * Math.PI * 2
+    this.speed = speed
+    this.size = size
+    this.hue = hue
+    this.trail = []
+    this.trailLength = 25 // 拖尾长度
+    // 增加一点垂直方向的偏移，模拟 3D 环绕（Y轴压缩）
+    this.yScale = 1.0 // 正圆，配合 css 动效
+    // 呼吸效果
+    this.pulseOffset = Math.random() * Math.PI
+  }
+
+  update(centerX, centerY) {
+    this.angle += this.speed
+
+    // 半径微调，形成呼吸感
+    const pulse = Math.sin(Date.now() * 0.002 + this.pulseOffset) * 10
+    const currentRadius = this.baseRadius + pulse
+
+    const x = centerX + Math.cos(this.angle) * currentRadius
+    const y = centerY + Math.sin(this.angle) * currentRadius * this.yScale
+
+    // 记录拖尾
+    this.trail.push({ x, y, alpha: 1.0 })
+    if (this.trail.length > this.trailLength) {
+      this.trail.shift()
+    }
+
+    // 衰减拖尾
+    this.trail.forEach(p => p.alpha *= 0.92)
+  }
+
+  draw(ctx) {
+    ctx.save()
+    ctx.globalCompositeOperation = 'lighter' // 叠加模式，增强发光
+
+    // 绘制拖尾
+    this.trail.forEach((p, i) => {
+      const ratio = i / this.trail.length
+      const size = this.size * (0.2 + ratio * 0.8) // 尾部变小
+      const alpha = p.alpha * ratio // 尾部变淡
+
+      ctx.beginPath()
+      const lightness = 50 + ratio * 40 // 头部更亮 (50 -> 90)
+      ctx.fillStyle = `hsla(${this.hue}, 100%, ${lightness}%, ${alpha})`
+
+      // 只给头部和近头部加光晕，提升性能
+      if (i > this.trailLength - 5) {
+        ctx.shadowBlur = 15 * ratio
+        ctx.shadowColor = `hsla(${this.hue}, 100%, 50%, 1)`
+      }
+
+      ctx.arc(p.x, p.y, size, 0, Math.PI * 2)
+      ctx.fill()
+    })
+
+    ctx.restore()
+  }
+}
+
 // 烟花粒子类
 class FireworkParticle {
   constructor(x, y, targetX, targetY, hue) {
@@ -609,6 +718,7 @@ function initCanvas() {
   resizeCanvas()
 
   createFloatingDots()
+  createOrbitingLights()
   animate()
 
   window.addEventListener('resize', resizeCanvas)
@@ -628,6 +738,25 @@ function createFloatingDots() {
   }
 }
 
+function createOrbitingLights() {
+  orbitingLights = []
+  // 创建几层不同的环绕光
+  // 礼物盒大概 300x300，所以半径在 200 左右
+
+  // 内圈快速流光
+  orbitingLights.push(new OrbitingLight(170, 0.05, 3, 45))
+  orbitingLights.push(new OrbitingLight(170, 0.05, 3, 45)) // 对称
+  orbitingLights[1].angle += Math.PI // 错开 180 度
+
+  // 中圈反向
+  orbitingLights.push(new OrbitingLight(190, -0.03, 2.5, 50))
+  orbitingLights.push(new OrbitingLight(190, -0.03, 2.5, 50))
+  orbitingLights[3].angle += Math.PI
+
+  // 外圈慢速大光点
+  orbitingLights.push(new OrbitingLight(220, 0.02, 4, 40))
+}
+
 function animate() {
   animationId = requestAnimationFrame(animate)
 
@@ -641,6 +770,35 @@ function animate() {
       dot.update(canvas.width, canvas.height)
       dot.draw(ctx)
     })
+
+    // 画金光环绕（只在待机和准备状态显示，因为开始抽奖后礼物盒会消失）
+    if (drawStatus.value === 'idle' || drawStatus.value === 'ready') {
+      let centerX = canvas.width / 2
+      let centerY = canvas.height / 2
+
+      // 如果能获取到礼物盒的位置，则以礼物盒为中心
+      if (giftBoxRef.value) {
+        const rect = giftBoxRef.value.getBoundingClientRect()
+        centerX = rect.left + rect.width / 2
+        centerY = rect.top + rect.height / 2
+      }
+
+      // 绘制一个底层的光环（增加辉光感）
+      ctx.save()
+      ctx.beginPath()
+      ctx.arc(centerX, centerY, 180, 0, Math.PI * 2)
+      ctx.strokeStyle = 'rgba(255, 215, 0, 0.1)'
+      ctx.lineWidth = 2
+      ctx.shadowBlur = 20
+      ctx.shadowColor = '#FFD700'
+      ctx.stroke()
+      ctx.restore()
+
+      orbitingLights.forEach(light => {
+        light.update(centerX, centerY)
+        light.draw(ctx)
+      })
+    }
   }
 
   // 更新速度线
@@ -882,17 +1040,23 @@ function startDraw() {
   const selectedWinners = draw(eligibleParticipants.value, winnerCount, settings.value)
   winners.value = selectedWinners
 
-  // 创建所有参与者的粒子
-  eligibleParticipants.value.forEach((person, index) => {
+  // 【分批出现】将参与者分成多个批次，每批延迟出现
+  // 打乱顺序后分批，这样每批都是随机的人
+  const shuffledParticipants = [...eligibleParticipants.value].sort(() => Math.random() - 0.5)
+  const batchSize = Math.ceil(shuffledParticipants.length / 8) // 分成约8批
+
+  shuffledParticipants.forEach((person, index) => {
     const isWinner = selectedWinners.some(w => w.id === person.id)
+    const batchIndex = Math.floor(index / batchSize) // 计算所属批次
     const particle = new NameParticle(
       centerX, centerY,
       person.name,
       isWinner,
       index,
-      eligibleParticipants.value.length,
+      shuffledParticipants.length,
       person.avatar,
-      person.department
+      person.department,
+      batchIndex // 传入批次索引
     )
     particles.push(particle)
   })
@@ -908,14 +1072,14 @@ function startDraw() {
     }
   }, 50)
 
-  // 根据动画速度设置自动停止时间
-  const durationMap = { fast: 1500, normal: 3000, slow: 5000 }
-  const autoStopTime = durationMap[settings.value?.animationSpeed || 'normal'] || 3000
+  // 根据动画速度设置自动停止时间（延长时间让名字飞到屏幕边缘）
+  const durationMap = { fast: 3000, normal: 5000, slow: 7000 }
+  const autoStopTime = durationMap[settings.value?.animationSpeed || 'normal'] || 5000
 
   drawTimer = setTimeout(() => {
     isAutoStopped.value = true
     stopDraw()
-  }, autoStopTime + 2000)
+  }, autoStopTime + 3000)
 }
 
 function stopDraw() {
@@ -1029,16 +1193,17 @@ const winnersLayoutType = computed(() => {
 })
 
 const prizeLevelStyle = computed(() => {
-  const prizeName = currentPrize.value.name
-  if (prizeName === '特等奖') {
+  const count = totalPrizeCount.value
+
+  // 只有1人中奖（特等奖/大奖级别）
+  if (count === 1) {
     return { icon: '👑', gradient: 'linear-gradient(135deg, #FFD700, #FFA500, #FF6B6B)', glow: '#FFD700' }
   }
-  if (prizeName === '一等奖') {
+  // 2-5人中奖（一等奖/二等奖级别）
+  if (count > 1 && count <= 5) {
     return { icon: '🏆', gradient: 'linear-gradient(135deg, #C0C0C0, #FFD700, #FFA500)', glow: '#FFD700' }
   }
-  if (prizeName === '二等奖') {
-    return { icon: '🥈', gradient: 'linear-gradient(135deg, #CD7F32, #B8860B, #DAA520)', glow: '#CD7F32' }
-  }
+  // 其他情况（普通奖项）
   return { icon: '🎁', gradient: 'linear-gradient(135deg, #FF6B6B, #FF8E53)', glow: '#FF6B6B' }
 })
 
@@ -1150,9 +1315,11 @@ onUnmounted(() => {
       <!-- 待抽奖状态 -->
       <transition name="fade">
         <div v-if="drawStatus === 'idle' || drawStatus === 'ready'" class="gift-container">
-          <div class="gift-box">
+          <div class="gift-box" ref="giftBoxRef">
             <div class="gift-glow"></div>
-            <div class="gift-icon">🎁</div>
+            <div class="gift-icon">
+              <img src="/images/liwu.png" alt="Gift" />
+            </div>
           </div>
           <div class="draw-info">
             <div class="draw-text">一次抽取 {{ currentBatchCount }} 人</div>
@@ -1168,7 +1335,7 @@ onUnmounted(() => {
           <template v-if="winnersLayoutType === 'showcase'">
             <div class="showcase-winners">
               <div v-for="(winner, index) in winners" :key="index" class="showcase-card"
-                :class="{ 'is-grand-prize': currentPrize.name === '特等奖' }" :style="{
+                :class="{ 'is-grand-prize': totalPrizeCount === 1 }" :style="{
                   background: prizeLevelStyle.gradient,
                   '--glow-color': prizeLevelStyle.glow,
                   animationDelay: `${index * 0.15}s`
@@ -1579,9 +1746,18 @@ onUnmounted(() => {
 }
 
 .gift-icon {
-  font-size: 15rem;
-  filter: drop-shadow(0 0 40px rgba(255, 215, 0, 0.8));
-  animation: gift-rotate 10s linear infinite;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 0 40px rgba(255, 215, 0, 0.6));
+}
+
+.gift-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 @keyframes gift-rotate {
@@ -1670,13 +1846,32 @@ onUnmounted(() => {
 }
 
 .showcase-card.is-grand-prize {
-  min-width: 500px;
-  padding: 3rem 4rem;
+  min-width: 800px;
+  padding: 5rem 6rem;
   transform: translateY(30px);
 }
 
 .showcase-card.is-grand-prize .winner-name-large {
+  font-size: 7rem;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.showcase-card.is-grand-prize .winner-avatar,
+.showcase-card.is-grand-prize .winner-avatar-placeholder {
+  width: 180px;
+  height: 180px;
+  border-width: 6px;
+  margin-bottom: 1.5rem;
+}
+
+.showcase-card.is-grand-prize .winner-avatar-placeholder {
   font-size: 5rem;
+}
+
+.showcase-card.is-grand-prize .winner-dept {
+  font-size: 2rem;
+  margin-top: 1rem;
 }
 
 /* 头像样式 */
@@ -1758,47 +1953,47 @@ onUnmounted(() => {
 /* 网格模式 */
 .compact-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1.5rem;
   max-width: 90%;
-  margin-top: 15rem;
+  margin-top: 5rem;
 }
 
 .compact-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 1rem;
+  padding: 1.5rem;
   background: rgba(0, 0, 0, 0.5);
   border: 2px solid rgba(255, 215, 0, 0.6);
-  border-radius: 12px;
+  border-radius: 16px;
   animation: compact-appear 0.4s ease-out backwards;
 }
 
 .compact-avatar {
-  width: 40px;
-  height: 40px;
+  width: 70px;
+  height: 70px;
   border-radius: 50%;
   background: rgba(255, 215, 0, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
+  font-size: 2rem;
   font-weight: 900;
   color: #8B0000;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.8rem;
 }
 
 .compact-name {
   color: #FFD700;
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: 1.6rem;
 }
 
 .compact-dept {
   color: rgba(255, 215, 0, 0.6);
-  font-size: 0.8rem;
-  margin-top: 0.25rem;
+  font-size: 1.1rem;
+  margin-top: 0.4rem;
 }
 
 @keyframes compact-appear {
