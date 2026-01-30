@@ -83,6 +83,24 @@ src/
 
 这些组件通过系统设置 (`settings.drawEffect`) 动态选择。
 
+**各抽奖页面通用功能：**
+- 上一奖项名单弹窗 - 点击按钮查看刚抽取的中奖结果
+- 全局背景切换 - 支持多种炫酷背景主题
+
+## 系统设置 (SettingsPage.vue)
+
+```javascript
+{
+  drawEffect: 'sphere3d' | 'trendy' | 'yima',  // 抽奖效果
+  background: string,                           // 背景主题
+  allowRepeatWins: boolean,                     // 是否允许重复中奖
+  weightedDraw: boolean,                        // 是否启用加权抽取
+  // ...其他设置
+}
+```
+
+## 核心功能特性
+
 ## 参与者数据结构
 
 ```javascript
@@ -118,6 +136,15 @@ src/
 2. 组件需接收 props：`prize`, `onDrawStart`, `onDrawComplete`
 3. 触发抽奖时调用 `onDrawStart()`，完成时调用 `onDrawComplete(winners)`
 4. 在 `SettingsPage.vue` 的效果选项中添加新选项
+
+## 核心功能特性
+
+- **多种抽奖效果** - 3D球体/时尚动感/马年主题三种视觉风格
+- **全局背景切换** - 支持多种炫酷背景主题
+- **上一奖项名单弹窗** - 抽奖结束后可查看刚抽取的中奖结果
+- **员工重复检测** - 导入时自动检测并提示重复员工
+- **加权抽取模式** - 可按部门/职级设置不同中奖权重
+- **中奖记录管理** - 支持查看、删除、导出中奖记录
 
 ## Excel 导入格式
 
