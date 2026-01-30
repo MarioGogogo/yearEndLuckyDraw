@@ -48,7 +48,7 @@ const grandPrizeDanmakuTexts = [
 ]
 
 // 喜庆词语（用于生成"名字+词语"格式的弹幕）
-const celebrationWords = [
+const celebrationWords = ['发红包🧧🧧！','发红包🧧🧧🧧','发红包🧧！',
   '恭喜发财！', '发大财！', '好运来！', '万事如意！', '心想事成！',
   '财源广进！', '大吉大利！', '福星高照！', '步步高升！', '红红火火！',
   '新年快乐！', '恭喜恭喜！', '鸿运当头！', '吉星高照！', '五福临门！'
@@ -118,13 +118,13 @@ const blessingMessages = [
 
 // 孔明灯类
 class Lantern {
-  constructor(name, x, imageIndex) {
+  constructor(name, x, imageIndex, screenHeight) {
     this.id = Date.now() + Math.random()
     this.name = name
     this.x = x
-    this.y = window.innerHeight + 100 // 从屏幕下方开始
+    this.y = screenHeight + 100 // 从屏幕下方开始
     this.targetY = -200 // 飘到屏幕上方
-    this.speed = 1 + Math.random() * 1 + 0.5 // 随机速度，稍微慢一点
+    this.speed = 1 + Math.random() * 1 + 0.5 // 随机速度
     this.scale = 0.6 + Math.random() * 0.3 // 随机大小
     this.opacity = 0.8 + Math.random() * 0.2 // 随机透明度
     this.imageIndex = imageIndex
@@ -161,20 +161,33 @@ const startLanternsAnimation = (names) => {
   lanterns.value = []
 
   // 为每个名字创建一个孔明灯
-  const batchSize = Math.min(30, names.length) // 最多30个，避免太多
+  const batchSize = Math.min(50, names.length)
   const shuffled = [...names].sort(() => Math.random() - 0.5).slice(0, batchSize)
 
   shuffled.forEach((name, index) => {
-    // 均匀分布在屏幕宽度上
-    const totalWidth = 80 // 使用 80% 的屏幕宽度区域
-    const startX = 10 // 从 10% 的位置开始
-    const x = startX + (totalWidth * index / batchSize) + (totalWidth / batchSize / 2) // 均匀分布，居中
+    // 根据屏幕宽度均匀分布（使用百分比）
+    const marginPercent = 5 // 左右边距 5%
+    const usablePercent = 90 // 可用宽度 90%
+    const x = marginPercent + (usablePercent * index / batchSize) + (usablePercent / batchSize / 2)
+
     const imageIndex = Math.floor(Math.random() * lanternImages.length)
-    const lantern = new Lantern(name, x, imageIndex)
-    // 错开开始时间
+    const screenHeight = window.innerHeight
+    const lantern = new Lantern(name, x, imageIndex, screenHeight)
+
+    // 调整灯笼参数
+    lantern.speed = 2 + Math.random() * 2 // 加快速度：2-4
+    lantern.scale = 0.5 + Math.random() * 0.2 // 稍微调小
+
+    // 上下错开起始位置（根据索引错开 0-300px）
+    lantern.y = screenHeight + 100 + (index * 6)
+    // 错开目标高度，避免同时到达顶部
+    lantern.targetY = -200 - (index * 8)
+
+    // 分批次延迟启动：每批 5 个，间隔 300ms
+    const batchIndex = Math.floor(index / 5)
     setTimeout(() => {
       lanterns.value.push(lantern)
-    }, index * 100)
+    }, batchIndex * 300)
   })
 }
 
@@ -241,6 +254,11 @@ const isCurrentPrizeAvailable = computed(() => {
   return !isPrizeCompleted(currentPrize.value)
 })
 
+// 抽奖按钮是否禁用（参考 Sphere3DScreen.vue）
+const isDrawButtonDisabled = computed(() => {
+  return eligibleList.value.length === 0 || !isCurrentPrizeAvailable.value
+})
+
 // 中奖人信息显示（参考 Sphere3DScreen.vue）
 const showAvatar = computed(() => settings.value?.showWinnerAvatar)
 const showDept = computed(() => settings.value?.showWinnerDept)
@@ -256,6 +274,13 @@ const prizeDrawnCount = computed(() => winnerRecords.value.filter(r => r.prizeId
 
 // 剩余可抽取人数
 const remainingCount = computed(() => Math.max(0, totalPrizeCount.value - prizeDrawnCount.value))
+
+// 当前轮次应抽取人数（考虑剩余人数，最后一批可能不足batchCount）
+const currentBatchCount = computed(() => {
+  const batch = batchCount.value
+  const remaining = remainingCount.value
+  return Math.min(batch, remaining)
+})
 
 // 预计还需抽取次数（向上取整）
 const remainingDraws = computed(() => {
@@ -527,8 +552,8 @@ const finalizeDraw = () => {
   // 播放结束音效
   playSound('end')
 
-  // 使用 batchCount（单次抽取数量），默认为 1
-  const count = currentPrize.value.batchCount || currentPrize.value.count || 1
+  // 使用 currentBatchCount（考虑剩余人数，最后一批可能不足batchCount）
+  const count = currentBatchCount.value
 
   // 选取中奖者
   const winners = []
@@ -550,14 +575,17 @@ const finalizeDraw = () => {
     addWinnerRecord(w, currentPrize.value)
   })
 
+  // 手动更新 winnerRecords，确保 remainingCount 正确计算
+  winnerRecords.value = loadWinnerRecords()
+
   // 显示中奖卡片
   showWinnerCard.value = true
 
   // 播放彩带
   fireConfetti()
 
-  // 刷新数据
-  loadData()
+  // 手动刷新数据（由用户自行决定）
+  // loadData()
 
   // 触发卡片动画（使用 nextTick 确保 DOM 已更新）
   nextTick(() => {
@@ -579,8 +607,13 @@ const finalizeDraw = () => {
 const initDanmaku = () => {
   danmakuList.value = []
 
+  // 调试日志
+  console.log('[弹幕] totalPrizeCount:', totalPrizeCount.value, 'currentPrize:', currentPrize.value)
+
   // 判断是否为大奖环节（根据该奖项总中奖人数，少于5人为大奖）
   const isGrandPrize = totalPrizeCount.value > 0 && totalPrizeCount.value < 5
+  console.log('[弹幕] isGrandPrize:', isGrandPrize, 'count:', isGrandPrize ? 100 : 40)
+
   const count = isGrandPrize ? 100 : 40
   const textsPool = isGrandPrize ? grandPrizeDanmakuTexts : danmakuTexts
 
@@ -745,8 +778,19 @@ const goToNextPrize = () => {
   }
 }
 
-// 是否可以切换到下一奖项
-const canGoToNextPrize = computed(() => currentPrizeIndex.value > 0)
+// 切换到上一奖项（更低一级）
+const goToPrevPrize = () => {
+  if (currentPrizeIndex.value < prizes.value.length - 1) {
+    currentPrizeIndex.value++
+    resetDraw()
+  }
+}
+
+// 是否可以切换到下一奖项（更高一级）
+const canGoToNextPrize = computed(() => prizes.value.length > 1)
+
+// 是否可以切换到上一奖项（更低一级）
+const canGoToPrevPrize = computed(() => currentPrizeIndex.value < prizes.value.length - 1)
 
 // 返回后台
 const goBack = () => {
@@ -865,8 +909,17 @@ onUnmounted(() => {
     <!-- 底部控制区 -->
     <footer class="screen-footer">
       <div class="control-area">
-        <button class="main-btn" :class="drawStatus === STATE.RUNNING ? 'stop-btn' : 'start-btn'" @click="toggleDraw">
-          {{ drawStatus === STATE.RUNNING ? '停止抽奖' : '开始抽奖' }}
+        <button v-if="drawStatus === STATE.IDLE || drawStatus === STATE.RESULT" class="main-btn"
+          :class="[
+            drawStatus === STATE.RESULT ? 'confirm-btn' : 'start-btn',
+            (isDrawButtonDisabled || remainingCount <= 0 || currentBatchCount <= 0) ? 'disabled-btn' : ''
+          ]"
+          :disabled="isDrawButtonDisabled || remainingCount <= 0 || currentBatchCount <= 0"
+          @click="toggleDraw">
+          {{ remainingCount <= 0 || currentBatchCount <= 0 ? '该奖项已抽完' : '开始抽奖' }}
+        </button>
+        <button v-else-if="drawStatus === STATE.RUNNING" class="main-btn stop-btn" @click="toggleDraw">
+          停止抽奖
         </button>
       </div>
     </footer>
@@ -881,7 +934,7 @@ onUnmounted(() => {
       <div v-if="totalPrizeCount > 0" class="prize-info-card">
         <div class="prize-name-large">{{ currentPrize.name }}</div>
         <div class="prize-details">
-          <span>名额: {{ totalPrizeCount }} (一次抽 {{ batchCount }} 人)</span>
+          <span>名额: {{ totalPrizeCount }} (一次抽 {{ currentBatchCount }} 人)</span>
           <span v-if="remainingDraws > 0" class="remaining-draws">还需 {{ remainingDraws }} 次</span>
         </div>
       </div>
@@ -1239,6 +1292,27 @@ onUnmounted(() => {
 .stop-btn:hover {
   transform: translateY(-4px) scale(1.05);
   box-shadow: 0 15px 40px rgba(255, 75, 75, 0.5), 0 0 60px rgba(255, 75, 75, 0.5);
+}
+
+.confirm-btn {
+  background: linear-gradient(135deg, #4CAF50, #45a049);
+  color: #FFFFFF;
+}
+
+.confirm-btn:hover {
+  transform: translateY(-4px) scale(1.05);
+  box-shadow: 0 15px 40px rgba(76, 175, 80, 0.5), 0 0 60px rgba(76, 175, 80, 0.5);
+}
+
+.disabled-btn {
+  background: linear-gradient(135deg, #888, #666) !important;
+  color: #ccc !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+}
+
+.disabled-btn:hover {
+  transform: none !important;
 }
 
 /* 奖项选择器 */
