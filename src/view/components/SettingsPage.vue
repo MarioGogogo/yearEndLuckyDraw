@@ -184,6 +184,21 @@ function selectMaxWin(value) {
   maxWinDropdownOpen.value = false
 }
 
+// 权重依据选项
+const weightedByOptions = [
+  { value: 'department', label: '按部门' },
+  { value: 'position', label: '按职级' }
+]
+
+const weightedByDropdownOpen = ref(false)
+function toggleWeightedByDropdown() {
+  weightedByDropdownOpen.value = !weightedByDropdownOpen.value
+}
+function selectWeightedBy(value) {
+  settings.value.weightedBy = value
+  weightedByDropdownOpen.value = false
+}
+
 // 倒计时选项
 const countdownOptions = [3, 5, 10]
 
@@ -204,6 +219,9 @@ function handleOutsideClick(e) {
   }
   if (maxWinDropdownOpen.value && !dropdown) {
     maxWinDropdownOpen.value = false
+  }
+  if (weightedByDropdownOpen.value && !dropdown) {
+    weightedByDropdownOpen.value = false
   }
 }
 </script>
@@ -314,10 +332,20 @@ function handleOutsideClick(e) {
               <label>权重依据</label>
               <p>按什么维度分配权重</p>
             </div>
-            <select v-model="settings.weightedBy" class="setting-select">
-              <option value="department">按部门</option>
-              <option value="position">按职级</option>
-            </select>
+            <div class="custom-dropdown">
+              <button class="dropdown-trigger" @click="toggleWeightedByDropdown">
+                <span class="trigger-text">{{weightedByOptions.find(o => o.value === settings.weightedBy)?.label}}</span>
+                <span class="dropdown-arrow" :class="{ open: weightedByDropdownOpen }">▼</span>
+              </button>
+              <Transition name="dropdown">
+                <div v-if="weightedByDropdownOpen" class="dropdown-menu">
+                  <button v-for="opt in weightedByOptions" :key="opt.value" class="dropdown-item"
+                    :class="{ active: settings.weightedBy === opt.value }" @click="selectWeightedBy(opt.value)">
+                    {{ opt.label }}
+                  </button>
+                </div>
+              </Transition>
+            </div>
           </div>
         </div>
       </div>
@@ -801,45 +829,6 @@ function handleOutsideClick(e) {
 
 :global(.dark) .setting-info p {
   color: #9ca3af;
-}
-
-.setting-select {
-  padding: 0.625rem 2.5rem 0.625rem 1rem;
-  background: white;
-  border: 2px solid #e5e7eb;
-  border-radius: 0.75rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #181111;
-  cursor: pointer;
-  appearance: none;
-  transition: all 0.2s ease;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23f42525' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.75rem center;
-  background-size: 1.25rem;
-}
-
-.setting-select:hover {
-  border-color: #f42525;
-  box-shadow: 0 0 0 3px rgba(244, 37, 37, 0.1);
-}
-
-.setting-select:focus {
-  outline: none;
-  border-color: #f42525;
-  box-shadow: 0 0 0 3px rgba(244, 37, 37, 0.2);
-}
-
-:global(.dark) .setting-select {
-  background-color: #1f1a1a;
-  border-color: #3d2a2a;
-  color: white;
-}
-
-:global(.dark) .setting-select:hover {
-  border-color: #f42525;
-  box-shadow: 0 0 0 3px rgba(244, 37, 37, 0.2);
 }
 
 /* 自定义下拉菜单 */

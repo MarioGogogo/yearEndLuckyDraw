@@ -71,6 +71,19 @@ const winnerRecords = ref([])
 const settings = ref({})
 const showPrizeSelector = ref(false)
 
+// 上一轮中奖结果（临时存储，防止误操作丢失）
+const lastPrizeWinners = ref([])
+const lastPrizeName = ref('')
+const showLastWinnersModal = ref(false)
+
+function openLastWinnersModal() {
+  showLastWinnersModal.value = true
+}
+
+function closeLastWinnersModal() {
+  showLastWinnersModal.value = false
+}
+
 // 动画相关
 let animationInterval = null
 let bgAnimationFrame = null
@@ -675,6 +688,12 @@ const fireConfetti = () => {
 
 // 重置
 const resetDraw = () => {
+  // 在重置前，保存当前中奖结果为上一轮名单
+  if (winnerList.value.length > 0) {
+    lastPrizeWinners.value = [...winnerList.value]
+    lastPrizeName.value = currentPrize.value.name
+  }
+
   drawStatus.value = STATE.IDLE
   currentName.value = '准备抽奖'
   showWinnerCard.value = false
@@ -689,6 +708,11 @@ const resetDraw = () => {
 // 切换抽奖状态
 const toggleDraw = () => {
   if (drawStatus.value === STATE.IDLE || drawStatus.value === STATE.RESULT) {
+    // 在开始新抽奖前，保存上一轮结果
+    if (drawStatus.value === STATE.RESULT && winnerList.value.length > 0) {
+      lastPrizeWinners.value = [...winnerList.value]
+      lastPrizeName.value = currentPrize.value.name
+    }
     startDraw()
   } else if (drawStatus.value === STATE.RUNNING) {
     stopDraw()
@@ -854,9 +878,12 @@ onUnmounted(() => {
         <span class="arrow">{{ showPrizeSelector ? '▲' : '▼' }}</span>
       </button>
       <!-- 奖项信息 -->
-      <div v-if="totalPrizeCount > 0" class="prize-info-text">
-        <span>名额: {{ totalPrizeCount }} (一次抽 {{ batchCount }} 人)</span>
-        <span v-if="remainingDraws > 0" class="remaining-draws">还需 {{ remainingDraws }} 次</span>
+      <div v-if="totalPrizeCount > 0" class="prize-info-card">
+        <div class="prize-name-large">{{ currentPrize.name }}</div>
+        <div class="prize-details">
+          <span>名额: {{ totalPrizeCount }} (一次抽 {{ batchCount }} 人)</span>
+          <span v-if="remainingDraws > 0" class="remaining-draws">还需 {{ remainingDraws }} 次</span>
+        </div>
       </div>
       <transition name="fade">
         <div v-if="showPrizeSelector" class="prize-options">
@@ -871,6 +898,11 @@ onUnmounted(() => {
         <span class="material-symbols-outlined">arrow_upward</span>
         下一奖项
       </button>
+      <!-- 上一奖项名单按钮 -->
+      <button v-if="lastPrizeWinners.length > 0" class="last-winners-btn" @click="openLastWinnersModal" title="查看上一奖项名单">
+        <span class="material-symbols-outlined">history</span>
+        上轮名单
+      </button>
     </div>
 
     <!-- 返回后台按钮 - 右下角 -->
@@ -878,6 +910,36 @@ onUnmounted(() => {
       返回后台
     </button>
   </div>
+
+  <!-- 上一奖项名单弹窗 -->
+  <Teleport to="body">
+    <Transition name="modal">
+      <div v-if="showLastWinnersModal" class="modal-overlay" @click.self="closeLastWinnersModal">
+        <div class="modal-container last-winners-modal">
+          <div class="modal-header">
+            <h3 class="modal-title">上一奖项 - {{ lastPrizeName }}</h3>
+            <button class="modal-close" @click="closeLastWinnersModal">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="winners-grid">
+              <div v-for="winner in lastPrizeWinners" :key="winner.id || winner" class="winner-card">
+                <div v-if="showAvatar" class="winner-avatar">{{ (winner.name || winner).charAt(0) }}</div>
+                <span class="winner-name">{{ winner.name || winner }}</span>
+                <span v-if="showDept && winner.department" class="winner-dept">{{ winner.department }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="modal-btn modal-btn-confirm" @click="closeLastWinnersModal">
+              确定
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -1212,22 +1274,40 @@ onUnmounted(() => {
   box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
 }
 
-.prize-info-text {
+.prize-info-card {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  padding: 0.5rem 1rem;
-  background: rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(255, 215, 0, 0.3);
-  border-radius: 20px;
+  padding: 0.75rem 1.25rem;
+  background: linear-gradient(135deg, rgba(139, 0, 0, 0.9), rgba(220, 20, 60, 0.8));
+  border: 2px solid #FFD700;
+  border-radius: 12px;
   color: #FFD700;
-  font-size: 0.85rem;
-  white-space: nowrap;
+  box-shadow:
+    0 4px 15px rgba(0, 0, 0, 0.4),
+    0 0 20px rgba(255, 215, 0, 0.2);
+  backdrop-filter: blur(10px);
 }
 
-.prize-info-text .remaining-draws {
-  color: rgba(255, 215, 0, 0.7);
-  font-size: 0.8rem;
+.prize-info-card .prize-name-large {
+  font-family: 'Ma Shan Zheng', cursive;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #FFD700;
+  text-shadow: 0 2px 8px rgba(255, 215, 0, 0.5);
+  letter-spacing: 2px;
+}
+
+.prize-info-card .prize-details {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.9rem;
+  color: rgba(255, 253, 208, 0.9);
+}
+
+.prize-info-card .remaining-draws {
+  color: #FFA500;
+  font-weight: 600;
 }
 
 .prize-options {
@@ -1296,6 +1376,199 @@ onUnmounted(() => {
 
 .next-prize-btn .material-symbols-outlined {
   font-size: 1.1rem;
+}
+
+/* 上一奖项名单按钮 */
+.last-winners-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(255, 215, 0, 0.5);
+  border-radius: 50px;
+  color: #FFD700;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  backdrop-filter: blur(10px);
+}
+
+.last-winners-btn:hover {
+  background: rgba(0, 0, 0, 0.8);
+  border-color: #FFD700;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+}
+
+.last-winners-btn .material-symbols-outlined {
+  font-size: 1.1rem;
+}
+
+/* 上一奖项名单弹窗 */
+.last-winners-modal {
+  max-width: 900px;
+  background: linear-gradient(145deg, #8B0000 0%, #DC143C 30%, #8B0000 100%);
+  border: 3px solid #FFD700;
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    0 0 40px rgba(255, 215, 0, 0.3),
+    inset 0 0 100px rgba(255, 215, 0, 0.1);
+}
+
+/* 弹窗头部 */
+.last-winners-modal .modal-header {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid rgba(255, 215, 0, 0.3);
+  background: linear-gradient(to right, rgba(255, 215, 0, 0.1), transparent);
+}
+
+.last-winners-modal .modal-title {
+  font-family: 'Ma Shan Zheng', cursive;
+  font-size: 1.8rem;
+  color: #FFD700;
+  text-shadow: 0 2px 10px rgba(255, 215, 0, 0.5);
+  margin: 0;
+}
+
+.last-winners-modal .modal-close {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 215, 0, 0.5);
+  background: rgba(0, 0, 0, 0.3);
+  color: #FFD700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+}
+
+.last-winners-modal .modal-close:hover {
+  background: rgba(255, 215, 0, 0.2);
+  border-color: #FFD700;
+  transform: rotate(90deg);
+}
+
+.last-winners-modal .modal-body {
+  padding: 1.5rem;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+/* 弹窗底部按钮 */
+.last-winners-modal .modal-footer {
+  padding: 1rem 1.5rem 1.5rem;
+  display: flex;
+  justify-content: center;
+  border-top: 2px solid rgba(255, 215, 0, 0.3);
+  background: linear-gradient(to right, transparent, rgba(255, 215, 0, 0.1));
+}
+
+.last-winners-modal .modal-btn {
+  padding: 0.75rem 3rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border-radius: 50px;
+  border: 2px solid #FFD700;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.last-winners-modal .modal-btn-confirm {
+  background: linear-gradient(135deg, #FFD700, #FFA500);
+  color: #8B0000;
+}
+
+.last-winners-modal .modal-btn-confirm:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 5px 20px rgba(255, 215, 0, 0.5);
+}
+
+.winners-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 1rem;
+  max-height: 450px;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.winner-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.25rem 0.75rem;
+  background: linear-gradient(145deg, #8B0000 0%, #DC143C 50%, #8B0000 100%);
+  border: 2px solid #FFD700;
+  border-radius: 1rem;
+  text-align: center;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow:
+    0 4px 15px rgba(0, 0, 0, 0.4),
+    0 0 20px rgba(255, 215, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.winner-card::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255, 215, 0, 0.1) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.winner-card:hover {
+  background: linear-gradient(145deg, #DC143C 0%, #FF4444 50%, #DC143C 100%);
+  border-color: #FFD700;
+  transform: translateY(-4px) scale(1.02);
+  box-shadow:
+    0 8px 25px rgba(0, 0, 0, 0.5),
+    0 0 30px rgba(255, 215, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.winner-avatar {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #FFD700 0%, #FFA500 50%, #FF8C00 100%);
+  color: #8B0000;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 1.4rem;
+  margin-bottom: 0.6rem;
+  box-shadow:
+    0 3px 10px rgba(255, 215, 0, 0.5),
+    inset 0 2px 4px rgba(255, 255, 255, 0.4);
+  position: relative;
+  z-index: 1;
+}
+
+.winner-name {
+  color: #FFD700;
+  font-weight: 700;
+  font-size: 1.1rem;
+  line-height: 1.3;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.winner-dept {
+  color: rgba(255, 253, 208, 0.8);
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
 }
 
 .badge {

@@ -20,9 +20,22 @@ const allParticipants = ref([])
 const eligibleList = ref([])
 const prizes = ref([])
 const currentPrizeIndex = ref(0)
-const winners = ref([]) 
+const winners = ref([])
 const winnerRecords = ref([])
 const showPrizeSelector = ref(false)
+
+// 上一轮中奖结果（临时存储，防止误操作丢失）
+const lastPrizeWinners = ref([])
+const lastPrizeName = ref('')
+const showLastWinnersModal = ref(false)
+
+function openLastWinnersModal() {
+  showLastWinnersModal.value = true
+}
+
+function closeLastWinnersModal() {
+  showLastWinnersModal.value = false
+}
 
 // Config
 const ROWS = 10
@@ -45,8 +58,14 @@ const isCurrentPrizeAvailable = computed(() => {
 
 // 获取设置
 const settings = ref(loadSettings() || {
-  enableSpecialBackground: true
+  enableSpecialBackground: true,
+  showWinnerAvatar: false,
+  showWinnerDept: false
 })
+
+// 中奖人信息显示
+const showAvatar = computed(() => settings.value?.showWinnerAvatar)
+const showDept = computed(() => settings.value?.showWinnerDept)
 
 const totalWinners = computed(() => winnerRecords.value.length)
 const totalParticipants = computed(() => allParticipants.value.length)
@@ -558,6 +577,11 @@ const showWinnerList = () => {
 const toggleDraw = () => {
   if (drawStatus.value === 'idle' || drawStatus.value === 'result') {
     if (drawStatus.value === 'result') {
+        // 在重置前保存上一轮结果
+        if (winners.value.length > 0) {
+          lastPrizeWinners.value = [...winners.value]
+          lastPrizeName.value = currentPrize.value.name
+        }
         // Reset scene texture colors before starting
         resetGridColors()
     }
@@ -703,14 +727,53 @@ const goBack = () => {
                 <span class="material-symbols-outlined">arrow_upward</span>
                 下一奖项
             </button>
+            <!-- 上一奖项名单按钮 -->
+            <button
+                v-if="lastPrizeWinners.length > 0"
+                class="last-winners-btn"
+                @click="openLastWinnersModal"
+                title="查看上一奖项名单"
+            >
+                <span class="material-symbols-outlined">history</span>
+                上轮名单
+            </button>
         </div>
-        
+
         <!-- Back Button (Bottom Right) -->
         <button class="back-btn-corner" @click="goBack">
             返回后台
         </button>
     </div>
   </div>
+
+  <!-- 上一奖项名单弹窗 -->
+  <Teleport to="body">
+    <Transition name="modal">
+      <div v-if="showLastWinnersModal" class="modal-overlay" @click.self="closeLastWinnersModal">
+        <div class="modal-container last-winners-modal">
+          <div class="modal-header">
+            <h3 class="modal-title">上一奖项 - {{ lastPrizeName }}</h3>
+            <button class="modal-close" @click="closeLastWinnersModal">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="winners-grid">
+              <div v-for="winner in lastPrizeWinners" :key="winner.id" class="winner-card">
+                <div v-if="showAvatar" class="winner-avatar">{{ winner.name.charAt(0) }}</div>
+                <span class="winner-name">{{ winner.name }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="modal-btn modal-btn-confirm" @click="closeLastWinnersModal">
+              确定
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -974,6 +1037,86 @@ const goBack = () => {
 
 .next-prize-btn .material-symbols-outlined {
     font-size: 1.1rem;
+}
+
+/* 上一奖项名单按钮 */
+.last-winners-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.75rem 1rem;
+    background: rgba(0, 0, 0, 0.6);
+    border: 2px solid rgba(255, 215, 0, 0.5);
+    border-radius: 30px;
+    color: #FFD700;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.3s;
+    backdrop-filter: blur(10px);
+}
+
+.last-winners-btn:hover {
+    background: rgba(0, 0, 0, 0.8);
+    border-color: #FFD700;
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+}
+
+.last-winners-btn .material-symbols-outlined {
+    font-size: 1.1rem;
+}
+
+/* 上一奖项名单弹窗 */
+.last-winners-modal {
+    max-width: 800px;
+}
+
+.winners-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.75rem;
+    max-height: 450px;
+    overflow-y: auto;
+    padding: 0.5rem;
+}
+
+.winner-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem 0.5rem;
+    background: rgba(255, 215, 0, 0.1);
+    border: 2px solid rgba(255, 215, 0, 0.3);
+    border-radius: 0.75rem;
+    text-align: center;
+    transition: all 0.2s;
+}
+
+.winner-card:hover {
+    background: rgba(255, 215, 0, 0.2);
+    border-color: rgba(255, 215, 0, 0.6);
+    transform: translateY(-2px);
+}
+
+.winner-avatar {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+    color: #8B0000;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+}
+
+.winner-name {
+    color: #FFD700;
+    font-weight: 600;
+    font-size: 1rem;
+    line-height: 1.3;
 }
 
 /* Back Button */
