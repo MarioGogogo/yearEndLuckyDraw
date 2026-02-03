@@ -930,6 +930,11 @@ onUnmounted(() => {
         {{ currentPrize.name || '选择奖项' }}
         <span class="arrow">{{ showPrizeSelector ? '▲' : '▼' }}</span>
       </button>
+      <!-- 奖品图片展示区 -->
+      <div v-if="currentPrize.image" class="prize-image-card">
+        <img :src="currentPrize.image" :alt="currentPrize.name" class="prize-image">
+      </div>
+
       <!-- 奖项信息 -->
       <div v-if="totalPrizeCount > 0" class="prize-info-card">
         <div class="prize-name-large">{{ currentPrize.name }}</div>
@@ -946,16 +951,28 @@ onUnmounted(() => {
           </div>
         </div>
       </transition>
-      <!-- 下一奖项按钮 -->
-      <button v-if="canGoToNextPrize" class="next-prize-btn" @click="goToNextPrize" title="切换到高一级奖项">
-        <span class="material-symbols-outlined">arrow_upward</span>
-        下一奖项
-      </button>
-      <!-- 上一奖项名单按钮 -->
-      <button v-if="lastPrizeWinners.length > 0" class="last-winners-btn" @click="openLastWinnersModal" title="查看上一奖项名单">
-        <span class="material-symbols-outlined">history</span>
-        上轮名单
-      </button>
+      <!-- 上下奖项按钮组 -->
+      <div class="prize-nav-row">
+        <!-- 左侧：上奖项和下一奖项 -->
+        <div class="prize-nav-group">
+          <button class="nav-btn prev-prize-btn" :class="{ disabled: !canGoToPrevPrize }"
+            :disabled="!canGoToPrevPrize" @click="goToPrevPrize" title="切换到低一级奖项">
+            <span class="material-symbols-outlined">arrow_downward</span>
+            上奖项
+          </button>
+          <button class="nav-btn next-prize-btn" :class="{ disabled: !canGoToNextPrize }"
+            :disabled="!canGoToNextPrize" @click="goToNextPrize" title="切换到高一级奖项">
+            <span class="material-symbols-outlined">arrow_upward</span>
+            下一奖项
+          </button>
+        </div>
+        <!-- 右侧：上一批获奖名单 -->
+        <button class="nav-btn last-winners-btn-corner" :class="{ disabled: lastPrizeWinners.length === 0 }"
+          :disabled="lastPrizeWinners.length === 0" @click="openLastWinnersModal" title="查看上一批获奖名单">
+          <span class="material-symbols-outlined">history</span>
+          上一批获奖名单
+        </button>
+      </div>
     </div>
 
     <!-- 返回后台按钮 - 右下角 -->
@@ -1322,8 +1339,9 @@ onUnmounted(() => {
   left: 2rem;
   z-index: 200;
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
   gap: 0.5rem;
+  min-width: 280px;
 }
 
 .prize-selector-btn {
@@ -1361,6 +1379,31 @@ onUnmounted(() => {
     0 4px 15px rgba(0, 0, 0, 0.4),
     0 0 20px rgba(255, 215, 0, 0.2);
   backdrop-filter: blur(10px);
+}
+
+/* 奖品图片展示区 */
+.prize-image-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+  border: 2px solid rgba(255, 215, 0, 0.6);
+  border-radius: 12px;
+  margin-bottom: 0.5rem;
+  box-shadow:
+    0 4px 15px rgba(0, 0, 0, 0.3),
+    0 0 15px rgba(255, 215, 0, 0.2),
+    inset 0 0 20px rgba(255, 215, 0, 0.1);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+.prize-image {
+  max-width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
 }
 
 .prize-info-card .prize-name-large {
@@ -1425,10 +1468,26 @@ onUnmounted(() => {
   background: rgba(255, 215, 0, 0.3);
 }
 
-/* 下一奖项按钮 */
-.next-prize-btn {
+/* 奖项导航行 - 水平布局 */
+.prize-nav-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* 下一奖项按钮组 - 左右布局 */
+.prize-nav-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.nav-btn {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.25rem;
   padding: 0.75rem 1rem;
   background: rgba(0, 0, 0, 0.6);
@@ -1442,41 +1501,31 @@ onUnmounted(() => {
   backdrop-filter: blur(10px);
 }
 
-.next-prize-btn:hover {
+.nav-btn:hover {
   background: rgba(0, 0, 0, 0.8);
   border-color: #FFD700;
   box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
 }
 
-.next-prize-btn .material-symbols-outlined {
-  font-size: 1.1rem;
-}
-
-/* 上一奖项名单按钮 */
-.last-winners-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.75rem 1rem;
+.nav-btn:hover.disabled {
   background: rgba(0, 0, 0, 0.6);
-  border: 2px solid rgba(255, 215, 0, 0.5);
-  border-radius: 50px;
-  color: #FFD700;
-  font-weight: 600;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all 0.3s;
-  backdrop-filter: blur(10px);
+  border-color: rgba(255, 215, 0, 0.5);
+  box-shadow: none;
+  cursor: not-allowed;
 }
 
-.last-winners-btn:hover {
-  background: rgba(0, 0, 0, 0.8);
-  border-color: #FFD700;
-  box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
-}
-
-.last-winners-btn .material-symbols-outlined {
+.nav-btn .material-symbols-outlined {
   font-size: 1.1rem;
+}
+
+.nav-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 上一批获奖名单按钮 */
+.last-winners-btn-corner {
+  flex-shrink: 0;
 }
 
 /* 上一奖项名单弹窗 */
