@@ -12,7 +12,8 @@ import {
   addWinnerRecord,
   updateParticipantStatus,
   saveWinnerRecords,
-  isPrizeCompleted
+  isPrizeCompleted,
+  saveParticipants
 } from '../../utils/lotteryStorage'
 import { draw, validateDrawResult, getAlgorithmInfo } from '../../utils/lotteryAlgorithm'
 
@@ -56,6 +57,68 @@ function closeLastWinnersModal() {
   showLastWinnersModal.value = false
 }
 
+// 放弃奖项确认弹窗
+const showAbandonConfirmModal = ref(false)
+const abandonWinner = ref(null)
+
+function openAbandonConfirmModal(winner) {
+  abandonWinner.value = winner
+  showAbandonConfirmModal.value = true
+}
+
+function closeAbandonConfirmModal() {
+  showAbandonConfirmModal.value = false
+  abandonWinner.value = null
+}
+
+// 确认放弃奖项
+function confirmAbandonWinner() {
+  if (!abandonWinner.value) return
+
+  const winner = abandonWinner.value
+
+  // 从 winners 中移除该中奖者
+  const index = winners.value.findIndex(w =>
+    (w.id && w.id === winner.id) || (w.name === winner.name && w.department === winner.department)
+  )
+  if (index !== -1) {
+    winners.value.splice(index, 1)
+  }
+
+  // 从缓存的中奖记录中移除该记录
+  const records = loadWinnerRecords()
+  const recordIndex = records.findIndex(r =>
+    (r.winnerId === winner.id) ||
+    (r.winnerName === winner.name && r.winnerDept === winner.department)
+  )
+  if (recordIndex !== -1) {
+    records.splice(recordIndex, 1)
+    saveWinnerRecords(records)
+    winnerRecords.value = records
+  }
+
+  // 重置该人员的中奖状态为 pending
+  const participants = loadParticipants()
+  const participantIndex = participants.findIndex(p =>
+    p.id === winner.id ||
+    (p.name === winner.name && p.department === winner.department)
+  )
+  if (participantIndex !== -1) {
+    participants[participantIndex].status = 'pending'
+    participants[participantIndex].winTime = null
+    saveParticipants(participants)
+    updateEligibleParticipants()
+  }
+
+  // 关闭弹窗
+  closeAbandonConfirmModal()
+
+  // 如果没有中奖者了，自动重置状态
+  if (winners.value.length === 0) {
+    drawStatus.value = 'idle'
+  }
+}
+
 // 大奖环节中奖者人名列表（用于"人名+词语"格式弹幕）
 let grandPrizeWinnerNames = []
 // 已中奖累计人数
@@ -89,29 +152,29 @@ const remainingDraws = computed(() => {
 
 // 弹幕
 const danmakuList = ref([])
-const danmakuTexts = [
-  '恭喜中奖！🎉', '吸欧气！✨', '大奖拿回家！🎁', '羡慕了！',
-  '下个就是我！💪', '太强了！', '666！', '好运连连！🍀',
-  '新年快乐！🧧', '万事如意！', '我也想要大奖！', '欧皇附体！',
-  '恭喜恭喜！', '一定要幸福哦！', '明年我也中！', '厉害了！',
-  '这运气没谁了！', '老板大气！', '蹭蹭喜气！', '发财了！'
-]
 
-// 大奖环节专用弹幕（更喜庆、更多样）
-const grandPrizeDanmakuTexts = [
-  '2026好运连连！🎉', '老板发红包！✨', '大奖拿回家！🎁', '羡慕了！', '太强了！',
-  '好运连连！🍀', '新年快乐！🧧', '万事如意！', '欧皇附体！', '恭喜恭喜！',
-  '今年运气爆棚！', '太幸运了吧！', '接好运啦！', '66666！', '这就是欧皇吗！',
-  '恭喜恭喜！🎊', '红红火火！', '恍恍惚惚！', '太厉害了！', '大吉大利！',
-  '好运来！🎵', '财源滚滚！💰', '心想事成！✨', '福气满满！🧧', '喜气洋洋！',
-  '运气太好了！', '让人羡慕！', '太强了吧！', '这就是实力！', '恭喜恭喜恭喜！'
-]
-
-// 喜庆词语（用于生成"名字+词语"格式的弹幕）
-const celebrationWords = ['发红包🧧🧧！','发红包🧧🧧🧧','发红包🧧！',
+// 庆祝词语（用于生成"名字+词语"格式的弹幕）- 包含马年、2026、西软真棒等元素
+const celebrationWords = [
+  // 马年主题
+  '马到成功🐎！', '马年大吉🐎！', '马上有钱🐎！', '马上有福🐎！', '万马奔腾🐎！',
+  '马不停蹄🐎！', '一马当先🐎！', '龙马精神🐎！', '马到功成🐎！', '马年行大运🐎！',
+  // 2026主题
+  '2026好运来🎉！', '2026发大财💰！', '2026万事如意✨！', '2026福气满满🧧！', '2026大吉大利🍀！',
+  '2026财源滚滚💎！', '2026心想事成⭐！', '2026好运连连🌟！', '2026万事顺遂🙏！', '2026鸿运当头🔥！',
+  // 西软主题
+  '西软真棒👏！', '西软最强💪！', '西软666👍！', '西软威武🚀！', '西软赛高🏆！',
+  '西软加油💯！', '西软给力🎯！', '西软无敌🔥！', '西软独秀🏅！', '西软独秀🌟！',
+  // 传统祝福
+  '发红包🧧🧧🧧！', '发红包🧧🧧！', '发红包🧧！',
   '恭喜发财！', '发大财！', '好运来！', '万事如意！', '心想事成！',
   '财源广进！', '大吉大利！', '福星高照！', '步步高升！', '红红火火！',
-  '新年快乐！', '恭喜恭喜！', '鸿运当头！', '吉星高照！', '五福临门！'
+  '新年快乐！', '恭喜恭喜！', '鸿运当头！', '吉星高照！', '五福临门！',
+  '喜气洋洋！', '吉祥如意！', '年年有余！', '花好月圆！', '金玉满堂！',
+  '万事亨通！', '吉庆有余！', '福寿双全！', '三阳开泰！', '六六大顺！',
+  // 特殊庆祝
+  '恭喜恭喜🎊！', '红红火火🎆！', '欢天喜地🎇！', '太厉害了🏅！', '大吉大利🍾！',
+  '好运来🎵！', '财源滚滚💰！', '福气满满🧧！', '喜气洋洋🎉！', '运气太好了✨！',
+  '让人羡慕😍！', '太强了吧💪！', '这就是欧皇👑！', '恭喜恭喜恭喜🎊！', '欧皇附体⚡！'
 ]
 
 // ========== 缓存加载 ==========
@@ -933,67 +996,48 @@ function animateFireworks() {
 function initDanmaku() {
   danmakuList.value = []
 
-  // 判断是否为大奖环节（根据该奖项总中奖人数，少于5人为大奖）
-  const isGrandPrize = totalPrizeCount.value > 0 && totalPrizeCount.value < 5
-  const count = isGrandPrize ? 100 : 40
-  const textsPool = isGrandPrize ? grandPrizeDanmakuTexts : danmakuTexts
+  console.log('[弹幕] 中奖人数:', grandPrizeWinnerNames.length)
+
+  // 所有奖项都采用大奖弹幕模式，生成80条弹幕
+  const count = 80
 
   for (let i = 0; i < count; i++) {
     let text
 
-    // 大奖环节：前20条弹幕使用"人名+喜庆词语"格式
-    if (isGrandPrize && i < 20 && grandPrizeWinnerNames.length > 0) {
+    // 所有弹幕都使用"人名+喜庆词语"格式
+    if (grandPrizeWinnerNames.length > 0) {
       const randomName = grandPrizeWinnerNames[Math.floor(Math.random() * grandPrizeWinnerNames.length)]
       const randomWord = celebrationWords[Math.floor(Math.random() * celebrationWords.length)]
       text = `${randomName}${randomWord}`
     } else {
-      text = textsPool[Math.floor(Math.random() * textsPool.length)]
+      // 如果没有中奖者，使用纯祝福语
+      text = celebrationWords[Math.floor(Math.random() * celebrationWords.length)]
     }
 
     // 优化弹幕分布：分层垂直位置，避免重叠
-    let top
-    if (isGrandPrize) {
-      // 大奖环节：将100条弹幕分成10层，每层10条
-      const layer = i % 10
-      const layerOffset = (Math.random() - 0.5) * 4 // 每层内微调 ±2%
-      top = 5 + layer * 9 + layerOffset // 从5%开始，每层间隔9%
-    } else {
-      // 互动设置中是否开启全屏弹幕
-      const isFullScreenBarrage = settings.value?.fullScreenBarrageEnabled !== false
-      if (isFullScreenBarrage) {
-        top = 5 + Math.random() * 85 // 在 5% - 90% 范围内随机分布
-      } else {
-        top = Math.random() * 20 // 限制在顶部 20% 范围内
-      }
-    }
+    // 将80条弹幕分成10层，每层8条
+    const layer = i % 10
+    const layerOffset = (Math.random() - 0.5) * 4 // 每层内微调 ±2%
+    const top = 5 + layer * 9 + layerOffset // 从5%开始，每层间隔9%
 
-    // 优化延迟时间：大奖弹幕延迟范围更长，分批出现
-    let delay
-    if (isGrandPrize) {
-      // 大奖环节：延迟0-60秒，分散出现
-      const batch = Math.floor(i / 10) // 分10批
-      delay = batch * 3 + Math.random() * 6 // 每批间隔约3秒，批内随机0-6秒
-    } else {
-      delay = Math.random() * 30
-    }
+    // 优化延迟时间：延迟0-60秒，分散出现
+    const batch = Math.floor(i / 8) // 分10批
+    const delay = batch * 3 + Math.random() * 6 // 每批间隔约3秒，批内随机0-6秒
 
-    const duration = isGrandPrize ? (20 + Math.random() * 15) : (15 + Math.random() * 20)
-    // 大奖弹幕字体稍小一些，避免太拥挤
-    const fontSize = isGrandPrize ? (1.0 + Math.random() * 0.8 + 'rem') : (1.2 + Math.random() * 1.5 + 'rem')
+    const duration = 18 + Math.random() * 12 // 18-30秒
 
-    // 大奖环节增加金色和红色弹幕比例（金色40%、红色40%、白色20%）
+    // 弹幕字体大小
+    const fontSize = 1.0 + Math.random() * 0.8 + 'rem'
+
+    // 弹幕颜色：金色50%、红色30%、白色20%
+    const rand = Math.random()
     let color
-    if (isGrandPrize) {
-      const rand = Math.random()
-      if (rand < 0.4) {
-        color = '#FFD700' // 金色 40%
-      } else if (rand < 0.8) {
-        color = '#FF6B6B' // 红色 40%
-      } else {
-        color = '#FFFFFF' // 白色 20%
-      }
+    if (rand < 0.5) {
+      color = '#FFD700' // 金色
+    } else if (rand < 0.8) {
+      color = '#FF6B6B' // 红色
     } else {
-      color = Math.random() > 0.6 ? '#FFD700' : '#FFFFFF'
+      color = '#FFFFFF' // 白色
     }
 
     danmakuList.value.push({
@@ -1359,7 +1403,8 @@ onUnmounted(() => {
                   background: prizeLevelStyle.gradient,
                   '--glow-color': prizeLevelStyle.glow,
                   animationDelay: `${index * 0.15}s`
-                }">
+                }"
+                @click="openAbandonConfirmModal(winner)" title="点击放弃奖项">
                 <!-- 头像显示 -->
                 <div v-if="showAvatar && winner.avatar" class="winner-avatar">
                   <img :src="winner.avatar" :alt="winner.name" />
@@ -1380,7 +1425,8 @@ onUnmounted(() => {
           <template v-else>
             <div class="compact-grid">
               <div v-for="(winner, index) in winners" :key="index" class="compact-card"
-                :style="{ animationDelay: `${index * 0.02}s` }">
+                :style="{ animationDelay: `${index * 0.02}s` }"
+                @click="openAbandonConfirmModal(winner)" title="点击放弃奖项">
                 <div v-if="showAvatar" class="compact-avatar">
                   {{ winner.name.charAt(0) }}
                 </div>
@@ -1505,6 +1551,39 @@ onUnmounted(() => {
           <div class="modal-footer">
             <button class="modal-btn modal-btn-confirm" @click="closeLastWinnersModal">
               确定
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- 放弃奖项确认弹窗 -->
+  <Teleport to="body">
+    <Transition name="modal">
+      <div v-if="showAbandonConfirmModal" class="modal-overlay" @click.self="closeAbandonConfirmModal">
+        <div class="modal-container abandon-modal">
+          <div class="modal-header">
+            <h3 class="modal-title">放弃奖项确认</h3>
+            <button class="modal-close" @click="closeAbandonConfirmModal">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div class="modal-body abandon-modal-body">
+            <div class="abandon-icon">⚠️</div>
+            <p class="abandon-message">确定要放弃奖项吗？</p>
+            <div class="abandon-winner-info">
+              <span class="winner-name">{{ abandonWinner?.name }}</span>
+              <span v-if="abandonWinner?.department" class="winner-dept">{{ abandonWinner.department }}</span>
+            </div>
+            <p class="abandon-hint">放弃后将从中奖名单中移除，并重新进入抽奖池</p>
+          </div>
+          <div class="modal-footer">
+            <button class="modal-btn modal-btn-cancel" @click="closeAbandonConfirmModal">
+              取消
+            </button>
+            <button class="modal-btn modal-btn-danger" @click="confirmAbandonWinner">
+              确认放弃
             </button>
           </div>
         </div>
@@ -1898,7 +1977,18 @@ onUnmounted(() => {
     0 0 60px var(--glow-color, #FFD700);
   animation: showcase-appear 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
   overflow: hidden;
-  cursor: default;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.showcase-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6),
+    0 0 80px var(--glow-color, #FFD700);
+}
+
+.showcase-card:hover .winner-name-large {
+  text-shadow: 0 0 30px rgba(255, 215, 0, 0.8);
 }
 
 .showcase-card.is-grand-prize {
@@ -2024,6 +2114,19 @@ onUnmounted(() => {
   border: 2px solid rgba(255, 215, 0, 0.6);
   border-radius: 16px;
   animation: compact-appear 0.4s ease-out backwards;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.compact-card:hover {
+  background: rgba(255, 215, 0, 0.2);
+  border-color: #FFD700;
+  transform: translateY(-4px) scale(1.05);
+  box-shadow: 0 8px 25px rgba(255, 215, 0, 0.4);
+}
+
+.compact-card:hover .compact-name {
+  text-shadow: 0 0 15px rgba(255, 215, 0, 0.6);
 }
 
 .compact-avatar {
@@ -2372,6 +2475,145 @@ onUnmounted(() => {
 .prize-options-leave-to {
   opacity: 0;
   transform: translateY(10px);
+}
+
+/* 放弃奖项确认弹窗 */
+.abandon-modal {
+  max-width: 450px;
+  background: linear-gradient(145deg, #8B0000 0%, #DC143C 30%, #8B0000 100%);
+  border: 3px solid #FFD700;
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    0 0 40px rgba(255, 215, 0, 0.3),
+    inset 0 0 100px rgba(255, 215, 0, 0.1);
+}
+
+.abandon-modal .modal-header {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid rgba(255, 215, 0, 0.3);
+  background: linear-gradient(to right, rgba(255, 215, 0, 0.1), transparent);
+}
+
+.abandon-modal .modal-title {
+  font-size: 1.6rem;
+  color: #FFD700;
+  text-shadow: 0 2px 10px rgba(255, 215, 0, 0.5);
+  margin: 0;
+}
+
+.abandon-modal .modal-close {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 215, 0, 0.5);
+  background: rgba(0, 0, 0, 0.3);
+  color: #FFD700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+}
+
+.abandon-modal .modal-close:hover {
+  background: rgba(255, 215, 0, 0.2);
+  border-color: #FFD700;
+  transform: rotate(90deg);
+}
+
+.abandon-modal-body {
+  padding: 2rem;
+  text-align: center;
+}
+
+.abandon-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+.abandon-message {
+  font-size: 1.3rem;
+  color: #FFF8D6;
+  margin: 0 0 1rem 0;
+}
+
+.abandon-winner-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  margin-bottom: 1rem;
+}
+
+.abandon-winner-info .winner-name {
+  font-weight: 700;
+  font-size: 1.8rem;
+  color: #FFD700;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.abandon-winner-info .winner-dept {
+  color: #FFF8D6;
+  opacity: 0.8;
+}
+
+.abandon-hint {
+  font-size: 0.9rem;
+  color: rgba(255, 253, 208, 0.7);
+  margin: 0;
+}
+
+.abandon-modal .modal-footer {
+  padding: 1rem 1.5rem 1.5rem;
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  border-top: 2px solid rgba(255, 215, 0, 0.3);
+  background: linear-gradient(to right, transparent, rgba(255, 215, 0, 0.1));
+}
+
+.abandon-modal .modal-btn {
+  padding: 0.75rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 50px;
+  border: 2px solid #FFD700;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.abandon-modal .modal-btn-cancel {
+  background: transparent;
+  color: #FFD700;
+}
+
+.abandon-modal .modal-btn-cancel:hover {
+  background: rgba(255, 215, 0, 0.15);
+}
+
+.abandon-modal .modal-btn-danger {
+  background: linear-gradient(135deg, #FF4444, #DC143C);
+  color: #FFF;
+  border-color: #FF6B6B;
+}
+
+.abandon-modal .modal-btn-danger:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 5px 20px rgba(255, 75, 75, 0.5);
 }
 
 /* 无奖项提示 */
