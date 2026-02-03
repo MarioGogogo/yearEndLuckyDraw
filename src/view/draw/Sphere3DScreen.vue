@@ -119,6 +119,22 @@ function confirmAbandonWinner() {
   }
 }
 
+// 上一奖项索引（用于"上奖项"功能）
+let previousPrizeIndex = null
+
+// 是否可以切换到上一奖项
+const canGoToPrevPrize = computed(() => {
+  return previousPrizeIndex !== null && previousPrizeIndex >= 0 && previousPrizeIndex < prizes.value.length
+})
+
+// 切换到上一奖项
+function goToPrevPrize() {
+  if (previousPrizeIndex !== null && previousPrizeIndex >= 0 && previousPrizeIndex < prizes.value.length) {
+    currentPrizeIndex.value = previousPrizeIndex
+    resetScene()
+  }
+}
+
 // 大奖环节中奖者人名列表（用于"人名+词语"格式弹幕）
 let grandPrizeWinnerNames = []
 // 已中奖累计人数
@@ -250,6 +266,8 @@ function selectPrize(index) {
   if (drawStatus.value !== 'idle' && drawStatus.value !== 'ready') return
   // 如果奖项已抽取完毕，不允许选择
   if (isPrizeCompleted(prize)) return
+  // 保存当前奖项索引为上一奖项
+  previousPrizeIndex = currentPrizeIndex.value
   currentPrizeIndex.value = index
   showPrizeSelector.value = false
   resetScene()
@@ -258,6 +276,7 @@ function selectPrize(index) {
 // 切换到下一奖项（更高一级）
 function goToNextPrize() {
   if (currentPrizeIndex.value > 0) {
+    previousPrizeIndex = currentPrizeIndex.value
     currentPrizeIndex.value--
     resetScene()
   }
@@ -1510,10 +1529,16 @@ onUnmounted(() => {
         下一奖项
       </button>
 
+      <!-- 上奖项按钮 -->
+      <button v-if="canGoToPrevPrize" class="prev-prize-btn" @click="goToPrevPrize" title="切换回上一奖项">
+        <span class="material-symbols-outlined">arrow_downward</span>
+        上奖项
+      </button>
+
       <!-- 上一奖项名单按钮 -->
       <button v-if="lastPrizeWinners.length > 0" class="last-winners-btn" @click="openLastWinnersModal" title="查看上一奖项名单">
         <span class="material-symbols-outlined">history</span>
-        上轮名单
+        上轮中奖名单
       </button>
     </div>
 
@@ -2377,6 +2402,33 @@ onUnmounted(() => {
 }
 
 .next-prize-btn .material-symbols-outlined {
+  font-size: 1.1rem;
+}
+
+/* 上奖项按钮 */
+.prev-prize-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(255, 215, 0, 0.5);
+  border-radius: 50px;
+  color: #FFD700;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  backdrop-filter: blur(10px);
+}
+
+.prev-prize-btn:hover {
+  background: rgba(0, 0, 0, 0.8);
+  border-color: #FFD700;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+}
+
+.prev-prize-btn .material-symbols-outlined {
   font-size: 1.1rem;
 }
 
