@@ -119,18 +119,16 @@ function confirmAbandonWinner() {
   }
 }
 
-// 上一奖项索引（用于"上奖项"功能）
-let previousPrizeIndex = null
+// 奖项历史栈(用于"上奖项"功能)
+const prizeHistory = ref([])
 
-// 是否可以切换到上一奖项
-const canGoToPrevPrize = computed(() => {
-  return previousPrizeIndex !== null && previousPrizeIndex >= 0 && previousPrizeIndex < prizes.value.length
-})
+// 初始奖项索引(用于判断是否在初始奖项)
+const initialPrizeIndex = ref(null)
 
 // 切换到上一奖项
 function goToPrevPrize() {
-  if (previousPrizeIndex !== null && previousPrizeIndex >= 0 && previousPrizeIndex < prizes.value.length) {
-    currentPrizeIndex.value = previousPrizeIndex
+  if (prizeHistory.value.length > 0) {
+    currentPrizeIndex.value = prizeHistory.value.pop()
     resetScene()
   }
 }
@@ -216,8 +214,10 @@ function loadSystemData() {
 
   // 加载奖项配置
   prizes.value = loadPrizes()
-  // 默认选中最后一个奖项（从大奖到小奖倒序抽奖）
+  // 默认选中最后一个奖项(从大奖到小奖倒序抽奖)
   currentPrizeIndex.value = Math.max(0, prizes.value.length - 1)
+  // 记录初始奖项索引
+  initialPrizeIndex.value = currentPrizeIndex.value
 
   // 加载中奖记录
   winnerRecords.value = loadWinnerRecords()
@@ -266,24 +266,38 @@ function selectPrize(index) {
   if (drawStatus.value !== 'idle' && drawStatus.value !== 'ready') return
   // 如果奖项已抽取完毕，不允许选择
   if (isPrizeCompleted(prize)) return
-  // 保存当前奖项索引为上一奖项
-  previousPrizeIndex = currentPrizeIndex.value
+  // 保存当前奖项索引到历史栈
+  prizeHistory.value.push(currentPrizeIndex.value)
   currentPrizeIndex.value = index
   showPrizeSelector.value = false
   resetScene()
 }
 
+// 下一奖项按钮是否可用
+const canGoToNextPrize = computed(() => currentPrizeIndex.value > 0)
+
+// 上一奖项按钮是否可用
+const canGoToPrevPrize = computed(() => {
+  // 如果尚未加载数据或历史栈为空，禁用
+  if (initialPrizeIndex.value === null || prizeHistory.value.length === 0) {
+    return false
+  }
+  // 如果当前奖项就是初始进入时的奖项，且历史栈中没有比它更早的，禁用
+  // (实际上有 historyLength > 0 已经足够判断是否有上一级)
+  if (currentPrizeIndex.value === initialPrizeIndex.value && prizeHistory.value.length === 0) {
+    return false
+  }
+  return true
+})
+
 // 切换到下一奖项（更高一级）
 function goToNextPrize() {
   if (currentPrizeIndex.value > 0) {
-    previousPrizeIndex = currentPrizeIndex.value
+    prizeHistory.value.push(currentPrizeIndex.value)
     currentPrizeIndex.value--
     resetScene()
   }
 }
-
-// 是否可以切换到下一奖项
-const canGoToNextPrize = computed(() => currentPrizeIndex.value > 0)
 
 // 获取奖项剩余可抽取数量
 function getPrizeDrawCount(prizeId) {
@@ -1422,8 +1436,7 @@ onUnmounted(() => {
                   background: prizeLevelStyle.gradient,
                   '--glow-color': prizeLevelStyle.glow,
                   animationDelay: `${index * 0.15}s`
-                }"
-                @click="openAbandonConfirmModal(winner)" title="点击放弃奖项">
+                }" @click="openAbandonConfirmModal(winner)" title="点击放弃奖项">
                 <!-- 头像显示 -->
                 <div v-if="showAvatar && winner.avatar" class="winner-avatar">
                   <img :src="winner.avatar" :alt="winner.name" />
@@ -1444,8 +1457,7 @@ onUnmounted(() => {
           <template v-else>
             <div class="compact-grid">
               <div v-for="(winner, index) in winners" :key="index" class="compact-card"
-                :style="{ animationDelay: `${index * 0.02}s` }"
-                @click="openAbandonConfirmModal(winner)" title="点击放弃奖项">
+                :style="{ animationDelay: `${index * 0.02}s` }" @click="openAbandonConfirmModal(winner)" title="点击放弃奖项">
                 <div v-if="showAvatar" class="compact-avatar">
                   {{ winner.name.charAt(0) }}
                 </div>
@@ -1498,6 +1510,11 @@ onUnmounted(() => {
         <span class="prize-selector-icon">{{ showPrizeSelector ? '▲' : '▼' }}</span>
       </button>
 
+      <!-- 奖品图片展示区 -->
+      <div v-if="currentPrize.image" class="prize-image-card">
+        <img :src="currentPrize.image" :alt="currentPrize.name" class="prize-image">
+      </div>
+
       <transition name="prize-options">
         <div v-if="showPrizeSelector" class="prize-options">
           <!-- 已完成的奖项（灰色禁用，分开显示） -->
@@ -1523,23 +1540,28 @@ onUnmounted(() => {
         </div>
       </transition>
 
-      <!-- 下一奖项按钮 -->
-      <button v-if="canGoToNextPrize" class="next-prize-btn" @click="goToNextPrize" title="切换到高一级奖项">
-        <span class="material-symbols-outlined">arrow_upward</span>
-        下一奖项
-      </button>
+      <!-- 导航按钮组 -->
+      <div class="prize-nav-buttons">
 
-      <!-- 上奖项按钮 -->
-      <button v-if="canGoToPrevPrize" class="prev-prize-btn" @click="goToPrevPrize" title="切换回上一奖项">
-        <span class="material-symbols-outlined">arrow_downward</span>
-        上奖项
-      </button>
-
-      <!-- 上一奖项名单按钮 -->
-      <button v-if="lastPrizeWinners.length > 0" class="last-winners-btn" @click="openLastWinnersModal" title="查看上一奖项名单">
-        <span class="material-symbols-outlined">history</span>
-        上轮中奖名单
-      </button>
+        <!-- 上奖项按钮 -->
+        <button class="prev-prize-btn" :class="{ 'disabled': !canGoToPrevPrize }" :disabled="!canGoToPrevPrize"
+          @click="goToPrevPrize" title="切换回上一奖项">
+          <span class="material-symbols-outlined">arrow_downward</span>
+          上奖项
+        </button>
+        <!-- 下一奖项按钮 -->
+        <button class="next-prize-btn" :class="{ 'disabled': !canGoToNextPrize }" :disabled="!canGoToNextPrize"
+          @click="goToNextPrize" title="切换到高一级奖项">
+          <span class="material-symbols-outlined">arrow_upward</span>
+          下一奖项
+        </button>
+        <!-- 上一奖项名单按钮 -->
+        <button v-if="lastPrizeWinners.length > 0" class="last-winners-btn" @click="openLastWinnersModal"
+          title="查看上一奖项名单">
+          <span class="material-symbols-outlined">history</span>
+          上轮中奖名单
+        </button>
+      </div>
     </div>
 
     <!-- 无奖项配置提示 -->
@@ -1863,8 +1885,8 @@ onUnmounted(() => {
 
 .gift-box {
   position: relative;
-  width: 300px;
-  height: 300px;
+  width: 450px;
+  height: 450px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1885,7 +1907,7 @@ onUnmounted(() => {
 
 .gift-glow {
   position: absolute;
-  inset: -40px;
+  inset: -60px;
   background: radial-gradient(circle, rgba(255, 215, 0, 0.4), transparent 70%);
   border-radius: 50%;
   animation: glow-pulse 2s ease-in-out infinite;
@@ -1935,22 +1957,22 @@ onUnmounted(() => {
 }
 
 .draw-text {
-  font-size: 1.8rem;
+  font-size: 2.5rem;
   color: #FFD700;
   font-weight: 700;
   text-shadow: 0 0 15px rgba(255, 215, 0, 0.6), 2px 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .algorithm-hint {
-  font-size: 0.9rem;
+  font-size: 1.1rem;
   color: rgba(255, 215, 0, 0.6);
-  margin-top: 0.5rem;
+  margin-top: 0.75rem;
 }
 
 .draw-subtext {
-  font-size: 0.85rem;
+  font-size: 1.2rem;
   color: rgba(255, 215, 0, 0.7);
-  margin-top: 0.25rem;
+  margin-top: 0.5rem;
 }
 
 /* 结果容器 */
@@ -2124,10 +2146,12 @@ onUnmounted(() => {
 /* 网格模式 */
 .compact-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, 220px);
+  justify-content: center;
   gap: 1.5rem;
-  max-width: 90%;
-  margin-top: 5rem;
+  width: 100%;
+  max-width: 1800px;
+  margin: 5rem auto 0;
 }
 
 .compact-card {
@@ -2271,8 +2295,26 @@ onUnmounted(() => {
   left: 2rem;
   z-index: 200;
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 0.5rem;
+}
+
+/* 奖品图片展示区 */
+.prize-image-card {
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid #FFD700;
+  border-radius: 12px;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+}
+
+.prize-image {
+  /* max-width: 400px; */
+  max-height: 280px;
+  object-fit: contain;
+  display: block;
 }
 
 .prize-selector-btn {
@@ -2405,6 +2447,17 @@ onUnmounted(() => {
   font-size: 1.1rem;
 }
 
+.next-prize-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.next-prize-btn:disabled:hover {
+  background: rgba(0, 0, 0, 0.6);
+  border-color: rgba(255, 215, 0, 0.5);
+  box-shadow: none;
+}
+
 /* 上奖项按钮 */
 .prev-prize-btn {
   display: flex;
@@ -2432,6 +2485,17 @@ onUnmounted(() => {
   font-size: 1.1rem;
 }
 
+.prev-prize-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.prev-prize-btn.disabled:hover {
+  background: rgba(0, 0, 0, 0.6);
+  border-color: rgba(255, 215, 0, 0.5);
+  box-shadow: none;
+}
+
 /* 上一奖项名单按钮 */
 .last-winners-btn {
   display: flex;
@@ -2457,6 +2521,14 @@ onUnmounted(() => {
 
 .last-winners-btn .material-symbols-outlined {
   font-size: 1.1rem;
+}
+
+/* 导航按钮组 */
+.prize-nav-buttons {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: 0.5rem;
+  margin-right: 0.5rem;
 }
 
 /* 上一奖项名单弹窗 */
@@ -2589,9 +2661,19 @@ onUnmounted(() => {
 }
 
 @keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-5px); }
-  75% { transform: translateX(5px); }
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  25% {
+    transform: translateX(-5px);
+  }
+
+  75% {
+    transform: translateX(5px);
+  }
 }
 
 .abandon-message {

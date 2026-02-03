@@ -125,7 +125,7 @@ function getStatusText(status) {
   <section class="table-section">
     <div class="table-container">
       <div class="table-header">
-        <h3>当前奖项列表(可拖拽排序)</h3>
+        <h3>当前奖项列表(可拖拽排序，抽取顺序最前面奖品最后抽)</h3>
         <div class="search-box">
           <span class="material-symbols-outlined search-icon">search</span>
           <input
