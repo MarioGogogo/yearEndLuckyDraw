@@ -52,8 +52,6 @@ const showDeleteDialog = ref(false)
 const deletingPrizeId = ref(null)
 const deletingPrizeName = ref('')
 const settings = ref({
-  drawMode: 'random',
-  weightedBy: 'department',
   allowRepeatWins: false,
   maxWinPerPerson: 1,
   showWinnerAvatar: true,

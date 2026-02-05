@@ -1,3 +1,9 @@
 # 新项目/mise.toml
 [tools]
 node = "20.19.6"
+
+
+[tasks]
+dev = { run = "npm run dev", description = "启动前端开发服务器 (Hot Reload)" }
+build = { run = "npm run build", description = "打包生产环境代码" }
+test = { run = "npm run test", description = "运行所有单元测试" }

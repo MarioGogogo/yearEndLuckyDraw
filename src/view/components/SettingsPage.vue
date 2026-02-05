@@ -11,10 +11,6 @@ const defaultSettings = {
   resetPoolEnabled: false,         // 中奖人不在场时回池重抽
   maxWinPerPerson: 1,              // 每人最多中奖次数
 
-  // 抽奖模式
-  drawMode: 'random',              // random-随机, weighted-加权
-  weightedBy: 'department',        // weighted时按什么加权: department/position
-
   // 页面模式
   pageMode: 'sphere3d',            // yima-一马当先, trendy-现代国潮, sphere3d-星耀抽奖
 
@@ -184,21 +180,6 @@ function selectMaxWin(value) {
   maxWinDropdownOpen.value = false
 }
 
-// 权重依据选项
-const weightedByOptions = [
-  { value: 'department', label: '按部门' },
-  { value: 'position', label: '按职级' }
-]
-
-const weightedByDropdownOpen = ref(false)
-function toggleWeightedByDropdown() {
-  weightedByDropdownOpen.value = !weightedByDropdownOpen.value
-}
-function selectWeightedBy(value) {
-  settings.value.weightedBy = value
-  weightedByDropdownOpen.value = false
-}
-
 // 倒计时选项
 const countdownOptions = [3, 5, 10]
 
@@ -219,9 +200,6 @@ function handleOutsideClick(e) {
   }
   if (maxWinDropdownOpen.value && !dropdown) {
     maxWinDropdownOpen.value = false
-  }
-  if (weightedByDropdownOpen.value && !dropdown) {
-    weightedByDropdownOpen.value = false
   }
 }
 </script>
@@ -285,62 +263,6 @@ function handleOutsideClick(e) {
                 <div v-if="maxWinDropdownOpen" class="dropdown-menu">
                   <button v-for="opt in maxWinOptions" :key="opt.value" class="dropdown-item"
                     :class="{ active: settings.maxWinPerPerson === opt.value }" @click="selectMaxWin(opt.value)">
-                    {{ opt.label }}
-                  </button>
-                </div>
-              </Transition>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 🎯 抽奖模式 -->
-      <div class="settings-card">
-        <div class="card-header">
-          <span class="card-icon">🎯</span>
-          <div>
-            <h3>抽奖模式</h3>
-            <p>选择抽奖算法和权重方式</p>
-          </div>
-        </div>
-
-        <div class="card-body">
-          <div class="setting-item vertical">
-            <label>抽奖算法</label>
-            <div class="radio-group">
-              <label class="radio-item">
-                <input v-model="settings.drawMode" type="radio" value="random" />
-                <span class="radio-custom"></span>
-                <div class="radio-content">
-                  <span class="radio-label">随机抽取</span>
-                  <span class="radio-desc">所有候选人概率相等</span>
-                </div>
-              </label>
-              <label class="radio-item">
-                <input v-model="settings.drawMode" type="radio" value="weighted" />
-                <span class="radio-custom"></span>
-                <div class="radio-content">
-                  <span class="radio-label">加权抽取</span>
-                  <span class="radio-desc">按部门或职级分配不同权重</span>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          <div v-if="settings.drawMode === 'weighted'" class="setting-item">
-            <div class="setting-info">
-              <label>权重依据</label>
-              <p>按什么维度分配权重</p>
-            </div>
-            <div class="custom-dropdown">
-              <button class="dropdown-trigger" @click="toggleWeightedByDropdown">
-                <span class="trigger-text">{{weightedByOptions.find(o => o.value === settings.weightedBy)?.label}}</span>
-                <span class="dropdown-arrow" :class="{ open: weightedByDropdownOpen }">▼</span>
-              </button>
-              <Transition name="dropdown">
-                <div v-if="weightedByDropdownOpen" class="dropdown-menu">
-                  <button v-for="opt in weightedByOptions" :key="opt.value" class="dropdown-item"
-                    :class="{ active: settings.weightedBy === opt.value }" @click="selectWeightedBy(opt.value)">
                     {{ opt.label }}
                   </button>
                 </div>

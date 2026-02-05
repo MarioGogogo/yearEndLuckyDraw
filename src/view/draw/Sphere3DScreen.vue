@@ -197,8 +197,6 @@ function loadSystemData() {
   const savedSettings = loadSettings()
   settings.value = savedSettings || {
     soundEnabled: true,              // 音效总开关
-    drawMode: 'random',
-    weightedBy: 'department',
     allowRepeatWins: false,
     showWinnerAvatar: false,         // 默认关闭头像显示
     showWinnerDept: false,           // 默认关闭部门显示
