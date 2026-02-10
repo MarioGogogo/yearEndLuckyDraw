@@ -23,7 +23,7 @@ const emit = defineEmits(['back'])
 const drawStatus = ref('idle') // idle, ready, drawing, stopping, result
 const showConfigAlert = ref(false)
 const configAlertMessage = ref('')
-const isAutoStopped = ref(false) // 标记是否是自动停止
+const showPrizeImage = ref(true) // 控制奖品图片显示/隐藏
 
 // 加载的数据
 const allParticipants = ref([])
@@ -325,7 +325,6 @@ function handleKeydown(e) {
       }
     } else if (drawStatus.value === 'drawing') {
       // 空格键停止抽奖
-      isAutoStopped.value = false
       stopDraw()
     }
   }
@@ -1117,7 +1116,6 @@ function startDraw() {
   }
 
   drawStatus.value = 'drawing'
-  isAutoStopped.value = false
 
   const centerX = canvas.width / 2
   const centerY = canvas.height / 2
@@ -1160,15 +1158,6 @@ function startDraw() {
       speedLines.push(new SpeedLine(centerX, centerY))
     }
   }, 50)
-
-  // 根据动画速度设置自动停止时间（延长时间让名字飞到屏幕边缘）
-  const durationMap = { fast: 3000, normal: 5000, slow: 7000 }
-  const autoStopTime = durationMap[settings.value?.animationSpeed || 'normal'] || 5000
-
-  drawTimer = setTimeout(() => {
-    isAutoStopped.value = true
-    stopDraw()
-  }, autoStopTime + 3000)
 }
 
 function stopDraw() {
@@ -1246,8 +1235,6 @@ function resetScene() {
   speedLines = []
   // 清空大奖中奖者人名列表
   grandPrizeWinnerNames = []
-  // 重置自动停止标记
-  isAutoStopped.value = false
 
   drawStatus.value = 'idle'
 }
@@ -1492,7 +1479,7 @@ onUnmounted(() => {
               {{ drawStatus === 'stopping' ? '正在停止...' : '停止抽奖' }}
             </button>
             <button v-else-if="drawStatus === 'result'" class="main-btn confirm-btn" @click="resetScene">
-              {{ isAutoStopped ? '确认结果，继续下一轮' : '继续下一轮' }}
+              继续下一轮
             </button>
       </div>
     </footer>
@@ -1509,8 +1496,14 @@ onUnmounted(() => {
       </button>
 
       <!-- 奖品图片展示区 -->
-      <div v-if="currentPrize.image" class="prize-image-card">
-        <img :src="currentPrize.image" :alt="currentPrize.name" class="prize-image">
+      <div v-if="currentPrize.image" class="prize-image-wrapper">
+        <div v-if="showPrizeImage" class="prize-image-card">
+          <img :src="currentPrize.image" :alt="currentPrize.name" class="prize-image">
+        </div>
+        <!-- 奖品图片显示/隐藏按钮 -->
+        <button class="toggle-image-btn" @click="showPrizeImage = !showPrizeImage" :title="showPrizeImage ? '隐藏奖品图片' : '显示奖品图片'">
+          <span class="material-symbols-outlined">{{ showPrizeImage ? 'visibility_off' : 'visibility' }}</span>
+        </button>
       </div>
 
       <transition name="prize-options">
@@ -2144,11 +2137,11 @@ onUnmounted(() => {
 /* 网格模式 */
 .compact-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, 220px);
+  grid-template-columns: repeat(auto-fit, 165px);
   justify-content: center;
-  gap: 1.5rem;
+  gap: 1rem;
   width: 100%;
-  max-width: 1800px;
+  max-width: 100%;
   margin: 5rem auto 0;
 }
 
@@ -2299,6 +2292,10 @@ onUnmounted(() => {
 }
 
 /* 奖品图片展示区 */
+.prize-image-wrapper {
+  position: relative;
+}
+
 .prize-image-card {
   background: rgba(0, 0, 0, 0.6);
   border: 2px solid #FFD700;
@@ -2313,6 +2310,34 @@ onUnmounted(() => {
   max-height: 280px;
   object-fit: contain;
   display: block;
+}
+
+/* 奖品图片显示/隐藏按钮 */
+.toggle-image-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(255, 215, 0, 0.6);
+  color: #FFD700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  z-index: 10;
+}
+
+.toggle-image-btn:hover {
+  background: rgba(255, 215, 0, 0.3);
+  border-color: #FFD700;
+}
+
+.toggle-image-btn .material-symbols-outlined {
+  font-size: 1rem;
 }
 
 .prize-selector-btn {

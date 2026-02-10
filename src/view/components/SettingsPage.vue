@@ -38,7 +38,7 @@ const defaultSettings = {
   // 显示设置
   showWinnerAvatar: false,         // 显示中奖人头像
   showWinnerDept: true,            // 显示中奖人部门
-  barrageEnabled: true,            // 开启弹幕
+  barrageEnabled: false,           // 开启弹幕
   fullScreenBarrageEnabled: true, // 开启全屏弹幕
   confirmBeforeAward: false,       // 颁奖前确认
 

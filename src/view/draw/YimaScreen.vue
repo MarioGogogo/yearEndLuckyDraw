@@ -73,6 +73,7 @@ const currentPrizeIndex = ref(0)
 const winnerRecords = ref([])
 const settings = ref({})
 const showPrizeSelector = ref(false)
+const showPrizeImage = ref(true) // 控制奖品图片显示/隐藏
 
 // 上一轮中奖结果（临时存储，防止误操作丢失）
 const lastPrizeWinners = ref([])
@@ -974,8 +975,14 @@ onUnmounted(() => {
         <span class="arrow">{{ showPrizeSelector ? '▲' : '▼' }}</span>
       </button>
       <!-- 奖品图片展示区 -->
-      <div v-if="currentPrize.image" class="prize-image-card">
-        <img :src="currentPrize.image" :alt="currentPrize.name" class="prize-image">
+      <div v-if="currentPrize.image" class="prize-image-wrapper">
+        <div v-if="showPrizeImage" class="prize-image-card">
+          <img :src="currentPrize.image" :alt="currentPrize.name" class="prize-image">
+        </div>
+        <!-- 奖品图片显示/隐藏按钮 -->
+        <button class="toggle-image-btn" @click="showPrizeImage = !showPrizeImage" :title="showPrizeImage ? '隐藏奖品图片' : '显示奖品图片'">
+          <span class="material-symbols-outlined">{{ showPrizeImage ? 'visibility_off' : 'visibility' }}</span>
+        </button>
       </div>
 
       <!-- 奖项信息 -->
@@ -1494,6 +1501,10 @@ onUnmounted(() => {
 }
 
 /* 奖品图片展示区 */
+.prize-image-wrapper {
+  position: relative;
+}
+
 .prize-image-card {
   display: flex;
   align-items: center;
@@ -1516,6 +1527,34 @@ onUnmounted(() => {
   max-height: 280px;
   object-fit: contain;
   filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
+}
+
+/* 奖品图片显示/隐藏按钮 */
+.toggle-image-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(255, 215, 0, 0.6);
+  color: #FFD700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  z-index: 10;
+}
+
+.toggle-image-btn:hover {
+  background: rgba(255, 215, 0, 0.3);
+  border-color: #FFD700;
+}
+
+.toggle-image-btn .material-symbols-outlined {
+  font-size: 1rem;
 }
 
 .prize-info-card .prize-name-large {
